@@ -6,6 +6,7 @@ Copyright © 2022 Serkan MERCAN <serkanmercan@email.com>
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/mrcnserkan/crypto/service"
@@ -14,15 +15,15 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "cryptocurrency-cli",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Use:   "crypto [coin-id]",
+	Short: "A simple cryptocurrency price checker in your console.",
+	Long: `Check the prices of cryptocurrencies, 24h and 7d percentage price changes, market capacities and all-time highs.
+For a cryptocurrency detail e.g. "crypto bitcoin"
+For search e.g. "crypto --search bitcoin"
+For page by page view e.g. "crypto --page 1 --per-page 20"
+For a custom currency e.g. "crypto --currency eur" or "crypto ethereum --currency try"`,
 	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println()
 		currency, _ := cmd.Flags().GetString("currency")
 		if len(args) > 0 {
 			coinName := args[0]
@@ -37,6 +38,7 @@ to quickly create a Cobra application.`,
 				PrintList(page, perPage, currency)
 			}
 		}
+		fmt.Println()
 	},
 }
 

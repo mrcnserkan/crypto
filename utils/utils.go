@@ -6,8 +6,10 @@ Copyright © 2022 Serkan MERCAN <serkanmercan@email.com>
 package utils
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	tableWriter "github.com/olekukonko/tablewriter"
 )
@@ -29,4 +31,13 @@ func ClearCoinName(coinName string) string {
 			), "",
 		),
 	)
+}
+
+func GetCaption() string {
+	return fmt.Sprintf("Data source from coingecko.com at %s", currentTime())
+}
+
+func currentTime() string {
+	currentTime := time.Now()
+	return currentTime.Format("2006-01-02 15:04:05")
 }

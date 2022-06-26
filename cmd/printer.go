@@ -48,6 +48,7 @@ func PrintList(page string, perPage string, currency string) {
 			{},
 		})
 	}
+	table.SetCaption(true, utils.GetCaption())
 	table.Render()
 }
 
@@ -84,6 +85,7 @@ func PrintCoinDetail(coinName string, currency string) {
 		{},
 		{},
 	})
+	table.SetCaption(true, utils.GetCaption())
 	table.Render()
 }
 
@@ -100,5 +102,6 @@ func PrintSearchResult(query string) {
 			element.Symbol,
 		})
 	}
+	table.SetCaption(true, utils.GetCaption())
 	table.Render()
 }
