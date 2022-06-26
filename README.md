@@ -5,7 +5,7 @@
 
 <p>This CLI Tool instantly retrieve prices and other information of cryptocurrencies.</p>
 
-![Cryptocurrency-CLI](https://github.com/mrcnserkan/crypto/blob/master/crypto.gif)
+![Cryptocurrency-CLI](https://github.com/mrcnserkan/crypto/blob/master/crypto.png)
 
 ## Installation
 
@@ -66,3 +66,7 @@ crypto --search solana
 
 crypto ethereum
 ```
+
+###
+
+![Cryptocurrency-CLI](https://github.com/mrcnserkan/crypto/blob/master/crypto.gif)
