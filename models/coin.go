@@ -34,7 +34,7 @@ type Coin struct {
 	MarketCap                          int64    `json:"market_cap"`
 	MarketCapRank                      int64    `json:"market_cap_rank"`
 	FullyDilutedValuation              *int64   `json:"fully_diluted_valuation"`
-	TotalVolume                        int64    `json:"total_volume"`
+	TotalVolume                        float64  `json:"total_volume"`
 	High24H                            float64  `json:"high_24h"`
 	Low24H                             float64  `json:"low_24h"`
 	PriceChange24H                     float64  `json:"price_change_24h"`
