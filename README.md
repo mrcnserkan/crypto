@@ -3,7 +3,7 @@
 <p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.16+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<img src="https://img.shields.io/badge/license-mit-red?style=for-the-badge&logo=none" alt="license" />
 </p>
 
-<p>This CLI Tool instantly retrieve prices and other information of cryptocurrencies.</p>
+<p>This CLI Tool is the easiest way to get cryptocurrency prices and more.</p>
 
 ![Cryptocurrency-CLI](https://github.com/mrcnserkan/crypto/blob/master/crypto.png)
 
