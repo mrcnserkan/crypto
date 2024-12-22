@@ -3,12 +3,6 @@ Copyright © 2022 Serkan MERCAN <serkanmercan@email.com>
 
 */
 
-// This file was generated from JSON Schema using quicktype, do not modify it directly.
-// To parse and unparse this JSON data, add this code to your project and do:
-//
-//    coinDetail, err := UnmarshalCoinDetail(bytes)
-//    bytes, err = coinDetail.Marshal()
-
 package models
 
 import "encoding/json"
