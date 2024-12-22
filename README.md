@@ -1,6 +1,9 @@
 # crypto
 
-<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.17+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v1.2.0" target="_blank"><img src="https://img.shields.io/badge/version-v1.2.0-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
+<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.17+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.
+com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a 
+href="https://github.com/mrcnserkan/crypto/releases/tag/v1.2.0" target="_blank"><img src="https://img.shields.io/badge/version-v1.2.1-blue?style=for-the-badge&logo=none" 
+alt="version" /></a></p>
 
 <p>A powerful and user-friendly CLI tool for real-time cryptocurrency tracking, portfolio management, and market analysis.</p>
 
@@ -146,17 +149,17 @@ crypto portfolio list
 # Check transaction history
 crypto portfolio history
 
-# Remove a coin from portfolio
-crypto portfolio remove bitcoin
+# Remove a specific coin from portfolio
+crypto portfolio remove bitcoin  # Will remove the coin and all its transactions
 
 # Clear entire portfolio
-crypto portfolio clear
+crypto portfolio clear  # Will remove all coins and transactions
 
 # Change currency for portfolio valuation
 crypto portfolio list --currency eur
 ```
 
-Example output:
+Example output for portfolio list:
 ```
 💼 Portfolio Holdings
 
@@ -167,6 +170,31 @@ Example output:
 -----------------+-------------+---------+----------+-------------
    TOTAL VALUE   |                          $6.65M  |
 -----------------+-------------+---------+----------+-------------
+```
+
+Example output for portfolio history:
+```
+📜 Transaction History
+
+       DATE        |  TYPE  |     COIN      |  AMOUNT   |  PRICE   
+-------------------+--------+---------------+-----------+----------
+  2024-01-22 10:30 | BUY    | Bitcoin (BTC) | 0.50000   | $95000.00
+  2024-01-22 15:45 | SELL   | Bitcoin (BTC) | 0.10000   | $96500.00
+  2024-01-23 09:15 | BUY    | Ethereum (ETH)| 2000.00000| $3270.00
+```
+
+Example output for portfolio remove:
+```
+Are you sure you want to remove BITCOIN (Amount: 0.500000) from your portfolio? (y/N): y
+
+💼 BITCOIN removed from portfolio successfully
+```
+
+Example output for portfolio clear:
+```
+Are you sure you want to clear your entire portfolio? (y/N): y
+
+💼 Portfolio cleared successfully
 ```
 
 ### Price Alerts
@@ -205,7 +233,7 @@ Contributions are welcome! Feel free to submit issues and pull requests.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE.md) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
