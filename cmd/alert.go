@@ -18,18 +18,42 @@ import (
 
 var alertCmd = &cobra.Command{
 	Use:   "alert",
-	Short: "Manage price alerts",
+	Short: "Price alert management",
 	Long: `Set and manage price alerts for cryptocurrencies.
-Alerts will notify you when a coin reaches a specified price.
 
-Note: Alerts are checked every 5 minutes to avoid API rate limits.
-Alerts are automatically removed once triggered.`,
+AVAILABLE COMMANDS:
+  add     Set a new price alert
+  list    View active alerts
+  remove  Remove specific alerts
+
+EXAMPLES:
+  1. Set price alerts:
+     crypto alert add bitcoin 50000 above    # Alert when BTC goes above $50,000
+     crypto alert add ethereum 2000 below    # Alert when ETH goes below $2,000
+
+  2. View alerts:
+     crypto alert list                       # Show all active alerts
+
+  3. Remove alerts:
+     crypto alert remove bitcoin             # Remove alerts for Bitcoin
+
+NOTE: Alerts are checked every 5 minutes and notifications are shown in the terminal`,
 }
 
 var alertAddCmd = &cobra.Command{
 	Use:   "add [coin-id] [price] [above/below]",
-	Short: "Add a new price alert",
-	Args:  cobra.ExactArgs(3),
+	Short: "Add price alert",
+	Long: `Set a new price alert for a cryptocurrency.
+
+ARGUMENTS:
+  coin-id  ID of the cryptocurrency (e.g., bitcoin)
+  price    Target price for the alert
+  type     Alert type: 'above' or 'below'
+
+EXAMPLES:
+  crypto alert add bitcoin 50000 above    # Alert when BTC goes above $50,000
+  crypto alert add ethereum 2000 below    # Alert when ETH goes below $2,000`,
+	Args: cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
 		coinID := args[0]
 		price, err := strconv.ParseFloat(args[1], 64)
@@ -72,7 +96,17 @@ var alertAddCmd = &cobra.Command{
 
 var alertListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all active alerts",
+	Short: "List active alerts",
+	Long: `Display all active price alerts.
+
+OUTPUT INCLUDES:
+  • Cryptocurrency name
+  • Alert condition (above/below)
+  • Target price
+  • Creation date and time
+
+EXAMPLE:
+  crypto alert list`,
 	Run: func(cmd *cobra.Command, args []string) {
 		alerts := alertManager.GetAlerts()
 		if len(alerts) == 0 {
@@ -114,8 +148,15 @@ var alertListCmd = &cobra.Command{
 
 var alertRemoveCmd = &cobra.Command{
 	Use:   "remove [coin-id]",
-	Short: "Remove an alert",
-	Args:  cobra.ExactArgs(1),
+	Short: "Remove price alert",
+	Long: `Remove all price alerts for a specific cryptocurrency.
+
+ARGUMENTS:
+  coin-id  ID of the cryptocurrency (e.g., bitcoin)
+
+EXAMPLE:
+  crypto alert remove bitcoin`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		coinID := args[0]
 		if err := alertManager.RemoveAlert(coinID); err != nil {

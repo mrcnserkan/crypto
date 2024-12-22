@@ -34,21 +34,62 @@ var (
 	rootCmd      *cobra.Command
 )
 
+const Version = "v1.2.2"
+
 func init() {
 	rootCmd = &cobra.Command{
 		Use:   "crypto [coin-id]",
 		Short: "A powerful cryptocurrency tracking CLI tool",
-		Long: `Crypto CLI is a powerful command-line tool for tracking cryptocurrency prices,
-managing your portfolio, and analyzing market trends. Features include:
+		Long: `Crypto CLI - Real-time cryptocurrency tracking and portfolio management
 
-- Real-time price tracking for thousands of cryptocurrencies
-- Interactive price charts with line and candlestick views
-- Portfolio management with total value tracking
-- Price alerts with customizable conditions
-- Detailed market data and statistics
-- Search functionality for finding specific coins`,
-		Args: cobra.MaximumNArgs(1),
+BASIC USAGE:
+  crypto                    List top cryptocurrencies
+  crypto bitcoin           Show detailed information for Bitcoin
+  crypto --search solana   Search for coins by name or symbol
+
+MAIN FEATURES:
+  • Real-time price tracking and market data
+  • Portfolio management with transaction history
+  • Price alerts with notifications
+  • Interactive price charts
+  • Multi-currency support (USD, EUR, TRY, etc.)
+
+EXAMPLES:
+  1. View top cryptocurrencies:
+     crypto                          # Default: page 1, 10 results
+     crypto --page 2                 # View next page
+     crypto --per-page 20           # Show 20 results per page
+     crypto --currency eur          # Show prices in EUR
+
+  2. Get detailed coin information:
+     crypto bitcoin                 # Show Bitcoin details
+     crypto ethereum               # Show Ethereum details
+     crypto --search "solana"      # Search for coins
+
+  3. View price charts:
+     crypto bitcoin --graph         # Show line chart
+     crypto bitcoin --graph --candles    # Show candlestick chart
+     crypto bitcoin --graph --interval 30d   # Show 30-day chart
+
+  4. Manage portfolio:
+     crypto portfolio add bitcoin 0.5 50000 buy   # Add transaction
+     crypto portfolio list                        # View holdings
+     crypto portfolio history                     # View history
+
+  5. Set price alerts:
+     crypto alert add bitcoin 50000 above   # Alert when price goes above
+     crypto alert list                      # View active alerts
+
+Use "crypto [command] --help" for more information about a command.`,
+		Version: Version,
+		Args:    cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			// Show version and exit if --version flag is used
+			if v, _ := cmd.Flags().GetBool("version"); v {
+				fmt.Printf("Crypto CLI %s\n", Version)
+				os.Exit(0)
+			}
+
 			currency, _ := cmd.Flags().GetString("currency")
 			if len(args) > 0 {
 				showGraph, _ := cmd.Flags().GetBool("graph")
@@ -77,6 +118,7 @@ managing your portfolio, and analyzing market trends. Features include:
 	}
 
 	// Root command flags
+	rootCmd.Flags().BoolP("version", "v", false, "Show version information")
 	rootCmd.PersistentFlags().String("currency", service.DEFAULT_CURRENCY, "Currency for price display (e.g., usd, eur, gbp)")
 	rootCmd.PersistentFlags().String("page", service.DEFAULT_PAGE, "Page number for paginated results")
 	rootCmd.PersistentFlags().String("per-page", service.PER_PAGE, "Number of results per page (max: 250)")

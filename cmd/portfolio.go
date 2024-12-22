@@ -18,28 +18,47 @@ import (
 var portfolioCmd = &cobra.Command{
 	Use:   "portfolio",
 	Short: "Portfolio management",
-	Long: `Manage your cryptocurrency portfolio and track your transactions.
-	
-Features:
-- Add buy/sell transactions with price history
-- Track portfolio value in real-time
-- View detailed transaction history
-- Remove specific coins or clear entire portfolio
-- Support for multiple currencies`,
+	Long: `Manage your cryptocurrency portfolio and track your investments.
+
+AVAILABLE COMMANDS:
+  add     Add a buy/sell transaction
+  list    View current portfolio status
+  history Show transaction history
+  remove  Remove a specific coin
+  clear   Clear entire portfolio
+
+EXAMPLES:
+  1. Add transactions:
+     crypto portfolio add bitcoin 0.5 50000 buy    # Buy 0.5 BTC at $50,000
+     crypto portfolio add ethereum 2.0 3000 sell   # Sell 2.0 ETH at $3,000
+
+  2. View portfolio:
+     crypto portfolio list                    # View in USD
+     crypto portfolio list --currency eur     # View in EUR
+
+  3. View history:
+     crypto portfolio history                 # View all transactions
+     crypto portfolio history --currency eur  # View with EUR prices
+
+  4. Remove coins:
+     crypto portfolio remove bitcoin          # Remove a specific coin
+     crypto portfolio clear                   # Clear entire portfolio
+
+NOTE: All portfolio data is stored locally in ~/.crypto/portfolio.json`,
 }
 
 var portfolioAddCmd = &cobra.Command{
 	Use:   "add [coin-id] [amount] [price] [buy/sell]",
 	Short: "Add transaction to portfolio",
 	Long: `Add a buy or sell transaction to your portfolio.
-	
-Arguments:
-  coin-id: ID of the cryptocurrency (e.g., bitcoin, ethereum)
-  amount:  Amount of coins in the transaction
-  price:   Price per coin at the time of transaction
-  type:    Transaction type (buy or sell)
 
-Example:
+ARGUMENTS:
+  coin-id  ID of the cryptocurrency (e.g., bitcoin, ethereum)
+  amount   Amount of coins in the transaction
+  price    Price per coin at the time of transaction
+  type     Transaction type (buy or sell)
+
+EXAMPLES:
   crypto portfolio add bitcoin 0.5 50000 buy    # Buy 0.5 BTC at $50,000
   crypto portfolio add ethereum 2.0 3000 sell   # Sell 2.0 ETH at $3,000`,
 	Args: cobra.ExactArgs(4),
@@ -95,21 +114,21 @@ var portfolioListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "View portfolio status",
 	Long: `Display current portfolio holdings with real-time values and 24h changes.
-	
-The output includes:
-- Coin name and symbol
-- Amount held
-- Current price
-- Total value
-- 24h price change percentage
-- Total portfolio value
 
-Flags:
-  --currency string   Currency for portfolio valuation (default "usd")
+OUTPUT INCLUDES:
+  • Coin name and symbol
+  • Amount held
+  • Current price
+  • Total value
+  • 24h price change
+  • Total portfolio value
 
-Example:
-  crypto portfolio list
-  crypto portfolio list --currency eur`,
+OPTIONS:
+  --currency string   Currency for valuation (default "usd")
+
+EXAMPLES:
+  crypto portfolio list                    # View in USD
+  crypto portfolio list --currency eur     # View in EUR`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(portfolio.Holdings) == 0 {
 			titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
@@ -193,20 +212,20 @@ var portfolioHistoryCmd = &cobra.Command{
 	Use:   "history",
 	Short: "View transaction history",
 	Long: `Display a chronological list of all portfolio transactions.
-	
-The output includes:
-- Transaction date and time
-- Transaction type (BUY/SELL)
-- Coin details
-- Amount traded
-- Price at transaction
 
-Flags:
+OUTPUT INCLUDES:
+  • Transaction date and time
+  • Transaction type (BUY/SELL)
+  • Coin details
+  • Amount traded
+  • Price at transaction
+
+OPTIONS:
   --currency string   Currency for price display (default "usd")
 
-Example:
-  crypto portfolio history
-  crypto portfolio history --currency eur`,
+EXAMPLES:
+  crypto portfolio history                 # View in USD
+  crypto portfolio history --currency eur  # View in EUR`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(portfolio.Transactions) == 0 {
 			titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
@@ -265,14 +284,14 @@ var portfolioClearCmd = &cobra.Command{
 	Use:   "clear",
 	Short: "Clear entire portfolio",
 	Long: `Remove all coins and transactions from your portfolio.
-	
-This command will:
-- Remove all cryptocurrency holdings
-- Delete all transaction history
-- Require confirmation before proceeding
-- Cannot be undone
 
-Example:
+THIS COMMAND WILL:
+  • Remove all cryptocurrency holdings
+  • Delete all transaction history
+  • Require confirmation before proceeding
+  • Cannot be undone
+
+EXAMPLE:
   crypto portfolio clear`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(portfolio.Holdings) == 0 {
@@ -306,17 +325,17 @@ var portfolioRemoveCmd = &cobra.Command{
 	Use:   "remove [coin-id]",
 	Short: "Remove a coin from portfolio",
 	Long: `Remove a specific coin and all its transactions from your portfolio.
-	
-This command will:
-- Remove the specified coin from holdings
-- Delete all transactions for this coin
-- Require confirmation before proceeding
-- Cannot be undone
 
-Arguments:
-  coin-id: ID of the cryptocurrency to remove (e.g., bitcoin)
+THIS COMMAND WILL:
+  • Remove the specified coin from holdings
+  • Delete all transactions for this coin
+  • Require confirmation before proceeding
+  • Cannot be undone
 
-Example:
+ARGUMENTS:
+  coin-id   ID of the cryptocurrency to remove (e.g., bitcoin)
+
+EXAMPLE:
   crypto portfolio remove bitcoin`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
