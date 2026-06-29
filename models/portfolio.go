@@ -7,10 +7,25 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
 )
+
+const holdingDustThreshold = 1e-10
+
+func isEffectivelyZero(value float64) bool {
+	return math.Abs(value) < holdingDustThreshold
+}
+
+func normalizeCurrency(currency string) string {
+	currency = strings.ToLower(strings.TrimSpace(currency))
+	if currency == "" {
+		return "usd"
+	}
+	return currency
+}
 
 type Transaction struct {
 	CoinID   string    `json:"coin_id"`
@@ -39,10 +54,14 @@ func NewPortfolio(filePath string) *Portfolio {
 func normalizeTransaction(t *Transaction) {
 	t.CoinID = strings.ToLower(strings.TrimSpace(t.CoinID))
 	t.Type = strings.ToLower(strings.TrimSpace(t.Type))
-	if t.Currency == "" {
-		t.Currency = "usd"
-	} else {
-		t.Currency = strings.ToLower(strings.TrimSpace(t.Currency))
+	t.Currency = normalizeCurrency(t.Currency)
+}
+
+func (p *Portfolio) pruneDustHoldings() {
+	for coinID, amount := range p.Holdings {
+		if isEffectivelyZero(amount) {
+			delete(p.Holdings, coinID)
+		}
 	}
 }
 
@@ -64,21 +83,28 @@ func (p *Portfolio) AddTransaction(t Transaction) error {
 	if t.Type == "buy" {
 		p.Holdings[t.CoinID] += t.Amount
 	} else {
-		if p.Holdings[t.CoinID] < t.Amount {
+		holding := p.Holdings[t.CoinID]
+		if t.Amount > holding+holdingDustThreshold {
 			return fmt.Errorf("insufficient balance")
 		}
-		p.Holdings[t.CoinID] -= t.Amount
-		if p.Holdings[t.CoinID] == 0 {
+		p.Holdings[t.CoinID] = holding - t.Amount
+		if isEffectivelyZero(p.Holdings[t.CoinID]) {
 			delete(p.Holdings, t.CoinID)
 		}
 	}
 
+	p.pruneDustHoldings()
 	p.Transactions = append(p.Transactions, t)
 	return p.Save()
 }
 
 func (p *Portfolio) GetHolding(coinID string) float64 {
 	return p.Holdings[strings.ToLower(strings.TrimSpace(coinID))]
+}
+
+func (p *Portfolio) HasHoldings() bool {
+	p.pruneDustHoldings()
+	return len(p.Holdings) > 0
 }
 
 func (p *Portfolio) Save() error {
@@ -98,7 +124,7 @@ func (p *Portfolio) Load() error {
 		return err
 	}
 	p.normalizeLoadedData()
-	return nil
+	return p.Save()
 }
 
 func (p *Portfolio) normalizeLoadedData() {
@@ -107,12 +133,8 @@ func (p *Portfolio) normalizeLoadedData() {
 		id := strings.ToLower(strings.TrimSpace(coinID))
 		normalizedHoldings[id] += amount
 	}
-	for coinID, amount := range normalizedHoldings {
-		if amount == 0 {
-			delete(normalizedHoldings, coinID)
-		}
-	}
 	p.Holdings = normalizedHoldings
+	p.pruneDustHoldings()
 
 	for i := range p.Transactions {
 		normalizeTransaction(&p.Transactions[i])
@@ -122,6 +144,9 @@ func (p *Portfolio) normalizeLoadedData() {
 func (p *Portfolio) CalculateValue(prices map[string]float64) float64 {
 	totalValue := 0.0
 	for coinID, amount := range p.Holdings {
+		if isEffectivelyZero(amount) {
+			continue
+		}
 		if price, ok := prices[coinID]; ok {
 			totalValue += amount * price
 		}

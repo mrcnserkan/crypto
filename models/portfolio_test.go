@@ -3,8 +3,54 @@ package models
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestPortfolio_FloatDustRemovedAfterFullSell(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "portfolio.json")
+	p := NewPortfolio(filePath)
+
+	for _, buyAmount := range []float64{0.1, 0.2} {
+		if err := p.AddTransaction(Transaction{
+			CoinID: "bitcoin", Symbol: "btc", Amount: buyAmount, Price: 100, Currency: "usd", Type: "buy",
+		}); err != nil {
+			t.Fatalf("AddTransaction(buy) error = %v", err)
+		}
+	}
+
+	if err := p.AddTransaction(Transaction{
+		CoinID: "bitcoin", Symbol: "btc", Amount: 0.3, Price: 100, Currency: "usd", Type: "sell",
+	}); err != nil {
+		t.Fatalf("AddTransaction(sell) error = %v", err)
+	}
+
+	if !p.HasHoldings() {
+		return
+	}
+	t.Fatalf("expected dust holding to be removed, got %+v", p.Holdings)
+}
+
+func TestPortfolio_LoadPersistsNormalization(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "portfolio.json")
+	payload := `{"holdings":{"BITCOIN":1},"transactions":[{"coin_id":"BITCOIN","symbol":"btc","amount":1,"price":100,"type":"buy","date":"2024-01-01T00:00:00Z"}]}`
+	if err := os.WriteFile(filePath, []byte(payload), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	p := NewPortfolio(filePath)
+	if err := p.Load(); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	stored, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !strings.Contains(string(stored), `"bitcoin"`) {
+		t.Fatalf("expected normalized coin id in saved file, got %s", string(stored))
+	}
+}
 
 func TestPortfolio_AddTransactionBuyAndSell(t *testing.T) {
 	filePath := filepath.Join(t.TempDir(), "portfolio.json")

@@ -7,6 +7,7 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,7 +17,11 @@ import (
 	tableWriter "github.com/olekukonko/tablewriter"
 )
 
-const MaxPerPage = 250
+const (
+	MaxPerPage           = 250
+	MaxMarketIDsPerBatch = 250
+	HoldingDustThreshold = 1e-10
+)
 
 func GetCellColorFromPriceChange(change float64) tableWriter.Colors {
 	if change < 0 {
@@ -27,6 +32,40 @@ func GetCellColorFromPriceChange(change float64) tableWriter.Colors {
 
 func NormalizeCoinID(coinID string) string {
 	return strings.ToLower(strings.TrimSpace(coinID))
+}
+
+func NormalizeCurrency(currency string) string {
+	currency = strings.ToLower(strings.TrimSpace(currency))
+	if currency == "" {
+		return "usd"
+	}
+	return currency
+}
+
+func IsEffectivelyZero(value float64) bool {
+	return math.Abs(value) < HoldingDustThreshold
+}
+
+func PriceFromCurrencyMap(prices map[string]float64, currency string) (float64, error) {
+	currency = NormalizeCurrency(currency)
+	price, ok := prices[currency]
+	if !ok {
+		return 0, fmt.Errorf("unsupported or invalid currency: %s", strings.ToUpper(currency))
+	}
+	return price, nil
+}
+
+func FloatFromCurrencyMap(values map[string]float64, currency string) (float64, error) {
+	return PriceFromCurrencyMap(values, currency)
+}
+
+func Int64FromCurrencyMap(values map[string]int64, currency string) (int64, error) {
+	currency = NormalizeCurrency(currency)
+	value, ok := values[currency]
+	if !ok {
+		return 0, fmt.Errorf("unsupported or invalid currency: %s", strings.ToUpper(currency))
+	}
+	return value, nil
 }
 
 func ClearCoinName(coinName string) string {

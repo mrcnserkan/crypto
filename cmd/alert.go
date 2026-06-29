@@ -70,10 +70,7 @@ EXAMPLES:
 		}
 
 		currency, _ := rootCmd.PersistentFlags().GetString("currency")
-		currency = strings.ToLower(strings.TrimSpace(currency))
-		if currency == "" {
-			currency = service.DEFAULT_CURRENCY
-		}
+		currency = utils.NormalizeCurrency(currency)
 
 		coin, err := coinGecko.GetCoinDetail(coinID)
 		if err != nil || coin.ID == "" {

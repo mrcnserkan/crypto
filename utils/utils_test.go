@@ -55,6 +55,29 @@ func TestCurrencySymbol(t *testing.T) {
 	}
 }
 
+func TestIsEffectivelyZero(t *testing.T) {
+	if !IsEffectivelyZero(5.551115123125783e-17) {
+		t.Fatal("expected float dust to be effectively zero")
+	}
+	if IsEffectivelyZero(0.0001) {
+		t.Fatal("expected small but real holding to remain")
+	}
+}
+
+func TestPriceFromCurrencyMap(t *testing.T) {
+	prices := map[string]float64{"usd": 100, "eur": 90}
+
+	price, err := PriceFromCurrencyMap(prices, "usd")
+	if err != nil || price != 100 {
+		t.Fatalf("PriceFromCurrencyMap(usd) = (%v, %v)", price, err)
+	}
+
+	_, err = PriceFromCurrencyMap(prices, "invalid")
+	if err == nil {
+		t.Fatal("expected error for invalid currency")
+	}
+}
+
 func TestFormatCurrency(t *testing.T) {
 	if got := FormatCurrency(1500); got != "1.50K" {
 		t.Fatalf("FormatCurrency(1500) = %q", got)

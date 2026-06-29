@@ -1,6 +1,6 @@
 # crypto
 
-<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v1.2.3" target="_blank"><img src="https://img.shields.io/badge/version-v1.2.3-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
+<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v1.2.4" target="_blank"><img src="https://img.shields.io/badge/version-v1.2.4-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
 
 <p>A powerful and user-friendly CLI tool for real-time cryptocurrency tracking, portfolio management, and market analysis.</p>
 
@@ -18,7 +18,7 @@
 
 ### Prerequisites
 
-- [Go 1.17+](https://golang.org/dl/) installed on your system
+- [Go 1.21+](https://golang.org/dl/) installed on your system
 - Internet connection for real-time data fetching
 
 ### Quick Install

@@ -80,10 +80,7 @@ EXAMPLES:
 		}
 
 		currency, _ := portfolioCmd.PersistentFlags().GetString("currency")
-		currency = strings.ToLower(strings.TrimSpace(currency))
-		if currency == "" {
-			currency = service.DEFAULT_CURRENCY
-		}
+		currency = utils.NormalizeCurrency(currency)
 
 		coin, err := coinGecko.GetCoinDetail(coinID)
 		if err != nil {
@@ -136,17 +133,14 @@ EXAMPLES:
   crypto portfolio list                    # View in USD
   crypto portfolio list --currency eur     # View in EUR`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(portfolio.Holdings) == 0 {
+		if !portfolio.HasHoldings() {
 			titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
 			fmt.Printf("\n%s %s\n", titleColor("💼"), titleColor("Portfolio is empty"))
 			return
 		}
 
 		currency, _ := cmd.Flags().GetString("currency")
-		currency = strings.ToLower(strings.TrimSpace(currency))
-		if currency == "" {
-			currency = service.DEFAULT_CURRENCY
-		}
+		currency = utils.NormalizeCurrency(currency)
 		currencySymbol := utils.CurrencySymbol(currency)
 
 		coinIDs := make([]string, 0, len(portfolio.Holdings))
@@ -182,6 +176,10 @@ EXAMPLES:
 		)
 
 		for coinID, amount := range portfolio.Holdings {
+			if utils.IsEffectivelyZero(amount) {
+				continue
+			}
+
 			coin, ok := coinByID[coinID]
 			if !ok {
 				fmt.Printf("Error fetching price for %s: coin not found in market data\n", coinID)
@@ -307,7 +305,7 @@ THIS COMMAND WILL:
 EXAMPLE:
   crypto portfolio clear`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(portfolio.Holdings) == 0 {
+		if !portfolio.HasHoldings() {
 			titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
 			fmt.Printf("\n%s %s\n", titleColor("💼"), titleColor("Portfolio is already empty"))
 			return
