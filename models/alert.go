@@ -9,13 +9,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
+
+const privateFileMode = 0o600
 
 type Alert struct {
 	CoinID    string    `json:"coin_id"`
 	Price     float64   `json:"price"`
 	Condition string    `json:"condition"` // "above" or "below"
+	Currency  string    `json:"currency,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -35,14 +39,33 @@ func NewAlertManager(configDir string) *AlertManager {
 	}
 }
 
+func normalizeAlert(alert *Alert) {
+	alert.CoinID = strings.ToLower(strings.TrimSpace(alert.CoinID))
+	alert.Condition = strings.ToLower(strings.TrimSpace(alert.Condition))
+	if alert.Currency == "" {
+		alert.Currency = "usd"
+	} else {
+		alert.Currency = strings.ToLower(strings.TrimSpace(alert.Currency))
+	}
+}
+
 func (am *AlertManager) AddAlert(alert Alert) error {
-	// Check if alert already exists
+	if alert.Price <= 0 {
+		return fmt.Errorf("price must be greater than zero")
+	}
+	if alert.Condition != "above" && alert.Condition != "below" {
+		return fmt.Errorf("condition must be 'above' or 'below'")
+	}
+
+	normalizeAlert(&alert)
+
 	for _, existingAlert := range am.alerts {
 		if existingAlert.CoinID == alert.CoinID &&
 			existingAlert.Price == alert.Price &&
-			existingAlert.Condition == alert.Condition {
-			return fmt.Errorf("alert already exists for %s at %.2f %s",
-				alert.CoinID, alert.Price, alert.Condition)
+			existingAlert.Condition == alert.Condition &&
+			existingAlert.Currency == alert.Currency {
+			return fmt.Errorf("alert already exists for %s at %.2f %s (%s)",
+				alert.CoinID, alert.Price, alert.Condition, strings.ToUpper(alert.Currency))
 		}
 	}
 
@@ -52,13 +75,38 @@ func (am *AlertManager) AddAlert(alert Alert) error {
 }
 
 func (am *AlertManager) RemoveAlert(coinID string) error {
-	for i, alert := range am.alerts {
+	coinID = strings.ToLower(strings.TrimSpace(coinID))
+
+	var remaining []Alert
+	removed := false
+	for _, alert := range am.alerts {
 		if alert.CoinID == coinID {
+			removed = true
+			continue
+		}
+		remaining = append(remaining, alert)
+	}
+	if !removed {
+		return fmt.Errorf("alert not found for coin: %s", coinID)
+	}
+
+	am.alerts = remaining
+	return am.Save()
+}
+
+func (am *AlertManager) RemoveTriggeredAlert(alert Alert) error {
+	normalizeAlert(&alert)
+
+	for i, existingAlert := range am.alerts {
+		if existingAlert.CoinID == alert.CoinID &&
+			existingAlert.Price == alert.Price &&
+			existingAlert.Condition == alert.Condition &&
+			existingAlert.Currency == alert.Currency {
 			am.alerts = append(am.alerts[:i], am.alerts[i+1:]...)
 			return am.Save()
 		}
 	}
-	return fmt.Errorf("alert not found for coin: %s", coinID)
+	return fmt.Errorf("triggered alert not found for coin: %s", alert.CoinID)
 }
 
 func (am *AlertManager) GetAlerts() []Alert {
@@ -79,7 +127,8 @@ func (am *AlertManager) Load() error {
 	err = json.Unmarshal(data, &alerts)
 	if err == nil {
 		am.alerts = alerts
-		return nil
+		am.normalizeLoadedAlerts()
+		return am.Save()
 	}
 
 	// Try to load old format
@@ -90,7 +139,14 @@ func (am *AlertManager) Load() error {
 	}
 
 	am.alerts = alertData.Alerts
-	return am.Save() // Save in new format
+	am.normalizeLoadedAlerts()
+	return am.Save()
+}
+
+func (am *AlertManager) normalizeLoadedAlerts() {
+	for i := range am.alerts {
+		normalizeAlert(&am.alerts[i])
+	}
 }
 
 func (am *AlertManager) Save() error {
@@ -99,5 +155,5 @@ func (am *AlertManager) Save() error {
 		return err
 	}
 
-	return os.WriteFile(am.alertFile, data, 0644)
+	return os.WriteFile(am.alertFile, data, privateFileMode)
 }

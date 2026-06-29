@@ -34,7 +34,7 @@ var (
 	rootCmd      *cobra.Command
 )
 
-const Version = "v1.2.2"
+const Version = "v1.2.3"
 
 func init() {
 	rootCmd = &cobra.Command{
@@ -95,14 +95,14 @@ Use "crypto [command] --help" for more information about a command.`,
 				showGraph, _ := cmd.Flags().GetBool("graph")
 
 				if showGraph {
-					displayPriceGraph(args[0], currency)
+					displayPriceGraph(utils.NormalizeCoinID(args[0]), currency)
 				} else {
-					coinDetail, err := coinGecko.GetCoinDetail(args[0])
+					coinDetail, err := coinGecko.GetCoinDetail(utils.NormalizeCoinID(args[0]))
 					if err != nil || coinDetail.ID == "" {
 						fmt.Printf("Error: Could not find coin with ID '%s'\n", args[0])
 						os.Exit(1)
 					}
-					PrintCoinDetail(args[0], currency)
+					PrintCoinDetail(coinDetail, currency)
 				}
 			} else {
 				search, _ := cmd.Flags().GetString("search")
@@ -156,11 +156,14 @@ Use "crypto [command] --help" for more information about a command.`,
 	if err := alertManager.Load(); err != nil {
 		fmt.Println("Error loading alerts:", err)
 	}
+}
 
-	// Start alert checker
-	alertChecker.Start()
+func Execute() {
+	if len(alertManager.GetAlerts()) > 0 {
+		alertChecker.EnsureRunning()
+	}
+	defer alertChecker.Stop()
 
-	// Handle graceful shutdown
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -169,9 +172,7 @@ Use "crypto [command] --help" for more information about a command.`,
 		alertChecker.Stop()
 		os.Exit(0)
 	}()
-}
 
-func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -179,10 +180,7 @@ func Execute() {
 }
 
 func displayPriceGraph(coinID, currency string) {
-	currencySymbol := service.DEFAULT_CURRENCY_SYMBOL
-	if currency != service.DEFAULT_CURRENCY {
-		currencySymbol = strings.ToUpper(currency)
-	}
+	currencySymbol := utils.CurrencySymbol(currency)
 
 	// Get interval and chart type from flags
 	interval, _ := rootCmd.Flags().GetString("interval")
@@ -276,10 +274,7 @@ func displayPriceGraph(coinID, currency string) {
 }
 
 func PrintList(page string, perPage string, currency string) {
-	currencySymbol := service.DEFAULT_CURRENCY_SYMBOL
-	if currency != service.DEFAULT_CURRENCY {
-		currencySymbol = strings.ToUpper(currency)
-	}
+	currencySymbol := utils.CurrencySymbol(currency)
 
 	printer := message.NewPrinter(language.English)
 	table := tablewriter.NewWriter(os.Stdout)
@@ -303,8 +298,16 @@ func PrintList(page string, perPage string, currency string) {
 		tablewriter.Colors{tablewriter.FgHiBlueColor},
 	)
 
-	pageNum := utils.StringToInt(page)
-	perPageNum := utils.StringToInt(perPage)
+	pageNum, err := utils.ParsePage(page)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+	perPageNum, err := utils.ParsePerPage(perPage)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
 	coins, err := coinGecko.GetMarkets(currency, perPageNum, pageNum)
 	if err != nil {
 		fmt.Printf("Error fetching market data: %v\n", err)
@@ -337,20 +340,11 @@ func PrintList(page string, perPage string, currency string) {
 	table.Render()
 }
 
-func PrintCoinDetail(coinName string, currency string) {
-	currencySymbol := service.DEFAULT_CURRENCY_SYMBOL
+func PrintCoinDetail(coinDetail models.CoinDetail, currency string) {
 	if currency == "" {
 		currency = service.DEFAULT_CURRENCY
 	}
-	if currency != service.DEFAULT_CURRENCY {
-		currencySymbol = strings.ToUpper(currency)
-	}
-
-	coinDetail, err := coinGecko.GetCoinDetail(coinName)
-	if err != nil || coinDetail.ID == "" {
-		fmt.Printf("Error: Could not find coin with ID '%s'\n", coinName)
-		os.Exit(1)
-	}
+	currencySymbol := utils.CurrencySymbol(currency)
 
 	// Color definitions
 	titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
@@ -385,8 +379,8 @@ func PrintCoinDetail(coinName string, currency string) {
 
 	// ATH/ATL information
 	fmt.Printf("\n%s\n", titleColor("🏆 All Time High/Low"))
-	fmt.Printf("%s %s%s (%s)\n", labelColor("ATH:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", coinDetail.MarketData.Ath[currency])), valueColor(coinDetail.MarketData.AthDate[currency][:10]))
-	fmt.Printf("%s %s%s (%s)\n", labelColor("ATL:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", coinDetail.MarketData.Atl[currency])), valueColor(coinDetail.MarketData.AtlDate[currency][:10]))
+	fmt.Printf("%s %s%s (%s)\n", labelColor("ATH:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", coinDetail.MarketData.Ath[currency])), valueColor(utils.FormatISODate(coinDetail.MarketData.AthDate[currency])))
+	fmt.Printf("%s %s%s (%s)\n", labelColor("ATL:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", coinDetail.MarketData.Atl[currency])), valueColor(utils.FormatISODate(coinDetail.MarketData.AtlDate[currency])))
 }
 
 func formatPriceChange(change float64, green, red func(a ...interface{}) string) string {

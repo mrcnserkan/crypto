@@ -16,11 +16,17 @@ import (
 	tableWriter "github.com/olekukonko/tablewriter"
 )
 
+const MaxPerPage = 250
+
 func GetCellColorFromPriceChange(change float64) tableWriter.Colors {
 	if change < 0 {
 		return tableWriter.Colors{tableWriter.Normal, tableWriter.FgRedColor}
 	}
 	return tableWriter.Colors{tableWriter.Normal, tableWriter.FgGreenColor}
+}
+
+func NormalizeCoinID(coinID string) string {
+	return strings.ToLower(strings.TrimSpace(coinID))
 }
 
 func ClearCoinName(coinName string) string {
@@ -43,12 +49,34 @@ func GetCurrentTime() string {
 	return time.Now().Format("2006-01-02 15:04:05")
 }
 
-func StringToInt(s string) int {
+func ParsePage(s string) (int, error) {
 	i, err := strconv.Atoi(s)
-	if err != nil {
-		return 1 // Default value
+	if err != nil || i < 1 {
+		return 0, fmt.Errorf("invalid page: %s (must be a positive integer)", s)
 	}
-	return i
+	return i, nil
+}
+
+func ParsePerPage(s string) (int, error) {
+	i, err := strconv.Atoi(s)
+	if err != nil || i < 1 || i > MaxPerPage {
+		return 0, fmt.Errorf("invalid per-page: %s (must be between 1 and %d)", s, MaxPerPage)
+	}
+	return i, nil
+}
+
+func CurrencySymbol(currency string) string {
+	if currency == "" || currency == "usd" {
+		return "$"
+	}
+	return strings.ToUpper(currency)
+}
+
+func FormatISODate(iso string) string {
+	if len(iso) >= 10 {
+		return iso[:10]
+	}
+	return iso
 }
 
 func FormatCurrency(value float64) string {

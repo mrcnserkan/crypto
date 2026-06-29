@@ -12,6 +12,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mrcnserkan/crypto/models"
+	"github.com/mrcnserkan/crypto/service"
+	"github.com/mrcnserkan/crypto/utils"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
@@ -55,41 +57,50 @@ EXAMPLES:
   crypto alert add ethereum 2000 below    # Alert when ETH goes below $2,000`,
 	Args: cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
-		coinID := args[0]
+		coinID := utils.NormalizeCoinID(args[0])
 		price, err := strconv.ParseFloat(args[1], 64)
-		if err != nil {
-			fmt.Println("Error: Invalid price value")
-			return
+		if err != nil || price <= 0 {
+			fmt.Println("Error: Invalid price value (must be greater than zero)")
+			os.Exit(1)
 		}
 		condition := strings.ToLower(args[2])
 		if condition != "above" && condition != "below" {
 			fmt.Println("Error: Condition must be 'above' or 'below'")
-			return
+			os.Exit(1)
 		}
 
-		// Verify coin exists
+		currency, _ := rootCmd.PersistentFlags().GetString("currency")
+		currency = strings.ToLower(strings.TrimSpace(currency))
+		if currency == "" {
+			currency = service.DEFAULT_CURRENCY
+		}
+
 		coin, err := coinGecko.GetCoinDetail(coinID)
 		if err != nil || coin.ID == "" {
 			fmt.Printf("Error: Could not find coin with ID '%s'\n", coinID)
-			return
+			os.Exit(1)
 		}
 
 		alert := models.Alert{
 			CoinID:    coinID,
 			Price:     price,
 			Condition: condition,
+			Currency:  currency,
 		}
 
 		if err := alertManager.AddAlert(alert); err != nil {
 			fmt.Printf("Error: %v\n", err)
-			return
+			os.Exit(1)
 		}
+
+		alertChecker.EnsureRunning()
 
 		titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
 		fmt.Printf("\n%s Alert added successfully!\n", titleColor("🔔"))
-		fmt.Printf("You will be notified when %s goes %s $%.2f\n",
+		fmt.Printf("You will be notified when %s goes %s %s%.2f\n",
 			strings.ToUpper(coinID),
 			condition,
+			utils.CurrencySymbol(currency),
 			price)
 	},
 }
@@ -119,9 +130,10 @@ EXAMPLE:
 		fmt.Printf("\n%s Active Price Alerts\n\n", titleColor("🔔"))
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Coin", "Condition", "Target Price", "Created At"})
+		table.SetHeader([]string{"Coin", "Condition", "Target Price", "Currency", "Created At"})
 		table.SetBorder(false)
 		table.SetHeaderColor(
+			tablewriter.Colors{tablewriter.FgHiBlueColor},
 			tablewriter.Colors{tablewriter.FgHiBlueColor},
 			tablewriter.Colors{tablewriter.FgHiBlueColor},
 			tablewriter.Colors{tablewriter.FgHiBlueColor},
@@ -129,12 +141,19 @@ EXAMPLE:
 		)
 
 		for _, alert := range alerts {
+			currency := alert.Currency
+			if currency == "" {
+				currency = service.DEFAULT_CURRENCY
+			}
+
 			table.Rich([]string{
 				strings.ToUpper(alert.CoinID),
 				alert.Condition,
-				fmt.Sprintf("$%.2f", alert.Price),
+				fmt.Sprintf("%s%.2f", utils.CurrencySymbol(currency), alert.Price),
+				strings.ToUpper(currency),
 				alert.CreatedAt.Format("2006-01-02 15:04"),
 			}, []tablewriter.Colors{
+				{tablewriter.FgHiWhiteColor},
 				{tablewriter.FgHiWhiteColor},
 				{tablewriter.FgHiWhiteColor},
 				{tablewriter.FgHiWhiteColor},
@@ -158,10 +177,10 @@ EXAMPLE:
   crypto alert remove bitcoin`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		coinID := args[0]
+		coinID := utils.NormalizeCoinID(args[0])
 		if err := alertManager.RemoveAlert(coinID); err != nil {
 			fmt.Printf("Error: %v\n", err)
-			return
+			os.Exit(1)
 		}
 
 		titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
