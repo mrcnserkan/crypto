@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mrcnserkan/crypto/models"
+	"github.com/mrcnserkan/crypto/utils"
 )
 
 const (
@@ -119,18 +120,44 @@ func (cg *CoinGecko) GetMarketsByIDs(currency string, ids []string) ([]models.Co
 	}
 
 	normalizedIDs := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
 		id = strings.ToLower(strings.TrimSpace(id))
-		if id != "" {
-			normalizedIDs = append(normalizedIDs, id)
+		if id == "" {
+			continue
 		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalizedIDs = append(normalizedIDs, id)
 	}
 	if len(normalizedIDs) == 0 {
 		return nil, nil
 	}
 
+	currency = utils.NormalizeCurrency(currency)
+	allCoins := make([]models.Coin, 0, len(normalizedIDs))
+
+	for start := 0; start < len(normalizedIDs); start += utils.MaxMarketIDsPerBatch {
+		end := start + utils.MaxMarketIDsPerBatch
+		if end > len(normalizedIDs) {
+			end = len(normalizedIDs)
+		}
+
+		coins, err := cg.getMarketsByIDsChunk(currency, normalizedIDs[start:end])
+		if err != nil {
+			return nil, err
+		}
+		allCoins = append(allCoins, coins...)
+	}
+
+	return allCoins, nil
+}
+
+func (cg *CoinGecko) getMarketsByIDsChunk(currency string, ids []string) ([]models.Coin, error) {
 	requestURL := fmt.Sprintf("%s/coins/markets?vs_currency=%s&ids=%s&order=market_cap_desc&sparkline=false&price_change_percentage=24h",
-		BaseURL, strings.ToLower(currency), strings.Join(normalizedIDs, ","))
+		BaseURL, currency, strings.Join(ids, ","))
 
 	bodyBytes, err := cg.get(requestURL)
 	if err != nil {
@@ -284,23 +311,32 @@ func (ac *AlertChecker) Start() {
 		defer ticker.Stop()
 		defer rateLimiter.Stop()
 
+		ac.runAlertChecks(rateLimiter.C, stopChan)
+
 		for {
 			select {
 			case <-stopChan:
 				return
 			case <-ticker.C:
-				alerts := ac.alertManager.GetAlerts()
-				for _, alert := range alerts {
-					select {
-					case <-rateLimiter.C:
-						ac.checkAlert(alert)
-					case <-stopChan:
-						return
-					}
+				if len(ac.alertManager.GetAlerts()) == 0 {
+					return
 				}
+				ac.runAlertChecks(rateLimiter.C, stopChan)
 			}
 		}
 	}()
+}
+
+func (ac *AlertChecker) runAlertChecks(rateLimiter <-chan time.Time, stopChan <-chan struct{}) {
+	alerts := ac.alertManager.GetAlerts()
+	for _, alert := range alerts {
+		select {
+		case <-rateLimiter:
+			ac.checkAlert(alert)
+		case <-stopChan:
+			return
+		}
+	}
 }
 
 func (ac *AlertChecker) Stop() {
@@ -326,14 +362,11 @@ func (ac *AlertChecker) checkAlert(alert models.Alert) {
 		return
 	}
 
-	currency := alert.Currency
-	if currency == "" {
-		currency = DEFAULT_CURRENCY
-	}
+	currency := utils.NormalizeCurrency(alert.Currency)
 
-	currentPrice := coin.MarketData.CurrentPrice[currency]
-	if currentPrice == 0 {
-		fmt.Printf("Error checking alert for %s: price unavailable for currency %s\n", alert.CoinID, strings.ToUpper(currency))
+	currentPrice, err := utils.PriceFromCurrencyMap(coin.MarketData.CurrentPrice, currency)
+	if err != nil {
+		fmt.Printf("Error checking alert for %s: %v\n", alert.CoinID, err)
 		return
 	}
 
@@ -347,14 +380,8 @@ func (ac *AlertChecker) checkAlert(alert models.Alert) {
 }
 
 func (ac *AlertChecker) sendNotification(alert models.Alert, currentPrice float64) {
-	currency := alert.Currency
-	if currency == "" {
-		currency = DEFAULT_CURRENCY
-	}
-	currencySymbol := DEFAULT_CURRENCY_SYMBOL
-	if currency != DEFAULT_CURRENCY {
-		currencySymbol = strings.ToUpper(currency)
-	}
+	currency := utils.NormalizeCurrency(alert.Currency)
+	currencySymbol := utils.CurrencySymbol(currency)
 
 	message := fmt.Sprintf("🚨 Price Alert: %s is %s %s%.2f (Target: %s%.2f %s)",
 		strings.ToUpper(alert.CoinID),

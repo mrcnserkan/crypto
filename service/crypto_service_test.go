@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,6 +85,33 @@ func TestCoinGecko_GetMarketsByIDsBuildsRequest(t *testing.T) {
 	}
 	if !strings.Contains(receivedPath, "ids=bitcoin,ethereum") {
 		t.Fatalf("unexpected request path: %s", receivedPath)
+	}
+}
+
+func TestCoinGecko_GetMarketsByIDsChunksLargeRequests(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer server.Close()
+
+	originalBaseURL := BaseURL
+	t.Cleanup(func() { BaseURL = originalBaseURL })
+	BaseURL = server.URL
+
+	ids := make([]string, 0, 301)
+	for i := 0; i < 301; i++ {
+		ids = append(ids, fmt.Sprintf("coin-%d", i))
+	}
+
+	cg := NewCoinGecko()
+	if _, err := cg.GetMarketsByIDs("usd", ids); err != nil {
+		t.Fatalf("GetMarketsByIDs() error = %v", err)
+	}
+	if requestCount != 2 {
+		t.Fatalf("expected 2 chunked requests, got %d", requestCount)
 	}
 }
 
