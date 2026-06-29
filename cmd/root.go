@@ -34,7 +34,7 @@ var (
 	rootCmd      *cobra.Command
 )
 
-const Version = "v1.2.3"
+const Version = "v1.2.4"
 
 func init() {
 	rootCmd = &cobra.Command{
@@ -139,7 +139,7 @@ Use "crypto [command] --help" for more information about a command.`,
 	}
 
 	configDir = filepath.Join(homeDir, ".crypto")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
@@ -180,6 +180,7 @@ func Execute() {
 }
 
 func displayPriceGraph(coinID, currency string) {
+	currency = utils.NormalizeCurrency(currency)
 	currencySymbol := utils.CurrencySymbol(currency)
 
 	// Get interval and chart type from flags
@@ -218,6 +219,11 @@ func displayPriceGraph(coinID, currency string) {
 			priceValues[i] = price[1]
 			timestamps = append(timestamps, time.Unix(int64(price[0])/1000, 0))
 		}
+	}
+
+	if len(priceValues) == 0 {
+		fmt.Println("Error: No price data available for the selected interval")
+		os.Exit(1)
 	}
 
 	// Color definitions
@@ -274,6 +280,18 @@ func displayPriceGraph(coinID, currency string) {
 }
 
 func PrintList(page string, perPage string, currency string) {
+	pageNum, err := utils.ParsePage(page)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+	perPageNum, err := utils.ParsePerPage(perPage)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	currency = utils.NormalizeCurrency(currency)
 	currencySymbol := utils.CurrencySymbol(currency)
 
 	printer := message.NewPrinter(language.English)
@@ -298,16 +316,6 @@ func PrintList(page string, perPage string, currency string) {
 		tablewriter.Colors{tablewriter.FgHiBlueColor},
 	)
 
-	pageNum, err := utils.ParsePage(page)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
-	perPageNum, err := utils.ParsePerPage(perPage)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
 	coins, err := coinGecko.GetMarkets(currency, perPageNum, pageNum)
 	if err != nil {
 		fmt.Printf("Error fetching market data: %v\n", err)
@@ -341,10 +349,61 @@ func PrintList(page string, perPage string, currency string) {
 }
 
 func PrintCoinDetail(coinDetail models.CoinDetail, currency string) {
-	if currency == "" {
-		currency = service.DEFAULT_CURRENCY
-	}
+	currency = utils.NormalizeCurrency(currency)
 	currencySymbol := utils.CurrencySymbol(currency)
+
+	currentPrice, err := utils.PriceFromCurrencyMap(coinDetail.MarketData.CurrentPrice, currency)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	marketCap, err := utils.Int64FromCurrencyMap(coinDetail.MarketData.MarketCap, currency)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	totalVolume, err := utils.FloatFromCurrencyMap(coinDetail.MarketData.TotalVolume, currency)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	ath, err := utils.FloatFromCurrencyMap(coinDetail.MarketData.Ath, currency)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	atl, err := utils.FloatFromCurrencyMap(coinDetail.MarketData.Atl, currency)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	change24h, err := utils.FloatFromCurrencyMap(coinDetail.MarketData.PriceChangePercentage24HInCurrency, currency)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+	change7d, err := utils.FloatFromCurrencyMap(coinDetail.MarketData.PriceChangePercentage7DInCurrency, currency)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+	change30d, err := utils.FloatFromCurrencyMap(coinDetail.MarketData.PriceChangePercentage30DInCurrency, currency)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	athDate, athDateOK := coinDetail.MarketData.AthDate[currency]
+	atlDate, atlDateOK := coinDetail.MarketData.AtlDate[currency]
+	if !athDateOK || !atlDateOK {
+		fmt.Printf("Error: unsupported or invalid currency: %s\n", strings.ToUpper(currency))
+		os.Exit(1)
+	}
 
 	// Color definitions
 	titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
@@ -356,13 +415,9 @@ func PrintCoinDetail(coinDetail models.CoinDetail, currency string) {
 	// Main information
 	fmt.Printf("\n%s %s\n", titleColor("🪙"), titleColor(fmt.Sprintf("%s (%s)", coinDetail.Name, strings.ToUpper(coinDetail.Symbol))))
 	fmt.Printf("%s %s\n", labelColor("Rank:"), valueColor(fmt.Sprintf("#%d", coinDetail.MarketCapRank)))
-	fmt.Printf("%s %s%s\n", labelColor("Price:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", coinDetail.MarketData.CurrentPrice[currency])))
+	fmt.Printf("%s %s%s\n", labelColor("Price:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", currentPrice)))
 
 	// Price changes
-	change24h := coinDetail.MarketData.PriceChangePercentage24HInCurrency[currency]
-	change7d := coinDetail.MarketData.PriceChangePercentage7DInCurrency[currency]
-	change30d := coinDetail.MarketData.PriceChangePercentage30DInCurrency[currency]
-
 	fmt.Printf("\n%s\n", titleColor("📊 Price Changes"))
 	fmt.Printf("%s %s\n", labelColor("24h:"), formatPriceChange(change24h, green, red))
 	fmt.Printf("%s %s\n", labelColor("7d:"), formatPriceChange(change7d, green, red))
@@ -370,8 +425,8 @@ func PrintCoinDetail(coinDetail models.CoinDetail, currency string) {
 
 	// Market data
 	fmt.Printf("\n%s\n", titleColor("📈 Market Data"))
-	fmt.Printf("%s %s%s\n", labelColor("Market Cap:"), currencySymbol, valueColor(utils.FormatCurrency(float64(coinDetail.MarketData.MarketCap[currency]))))
-	fmt.Printf("%s %s%s\n", labelColor("24h Volume:"), currencySymbol, valueColor(utils.FormatCurrency(coinDetail.MarketData.TotalVolume[currency])))
+	fmt.Printf("%s %s%s\n", labelColor("Market Cap:"), currencySymbol, valueColor(utils.FormatCurrency(float64(marketCap))))
+	fmt.Printf("%s %s%s\n", labelColor("24h Volume:"), currencySymbol, valueColor(utils.FormatCurrency(totalVolume)))
 	fmt.Printf("%s %s %s\n", labelColor("Circulating Supply:"), valueColor(utils.FormatCurrency(coinDetail.MarketData.CirculatingSupply)), strings.ToUpper(coinDetail.Symbol))
 	if coinDetail.MarketData.MaxSupply > 0 {
 		fmt.Printf("%s %s %s\n", labelColor("Max Supply:"), valueColor(utils.FormatCurrency(coinDetail.MarketData.MaxSupply)), strings.ToUpper(coinDetail.Symbol))
@@ -379,8 +434,8 @@ func PrintCoinDetail(coinDetail models.CoinDetail, currency string) {
 
 	// ATH/ATL information
 	fmt.Printf("\n%s\n", titleColor("🏆 All Time High/Low"))
-	fmt.Printf("%s %s%s (%s)\n", labelColor("ATH:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", coinDetail.MarketData.Ath[currency])), valueColor(utils.FormatISODate(coinDetail.MarketData.AthDate[currency])))
-	fmt.Printf("%s %s%s (%s)\n", labelColor("ATL:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", coinDetail.MarketData.Atl[currency])), valueColor(utils.FormatISODate(coinDetail.MarketData.AtlDate[currency])))
+	fmt.Printf("%s %s%s (%s)\n", labelColor("ATH:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", ath)), valueColor(utils.FormatISODate(athDate)))
+	fmt.Printf("%s %s%s (%s)\n", labelColor("ATL:"), currencySymbol, valueColor(fmt.Sprintf("%.2f", atl)), valueColor(utils.FormatISODate(atlDate)))
 }
 
 func formatPriceChange(change float64, green, red func(a ...interface{}) string) string {
