@@ -134,3 +134,43 @@ func TestPortfolio_SaveUsesPrivatePermissions(t *testing.T) {
 		t.Fatalf("expected file mode 0600, got %#o", info.Mode().Perm())
 	}
 }
+
+func TestPortfolio_HasAnyDataAfterFullSell(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "portfolio.json")
+	p := NewPortfolio(filePath)
+
+	_ = p.AddTransaction(Transaction{CoinID: "bitcoin", Symbol: "btc", Amount: 1, Price: 100, Currency: "usd", Type: "buy"})
+	_ = p.AddTransaction(Transaction{CoinID: "bitcoin", Symbol: "btc", Amount: 1, Price: 120, Currency: "usd", Type: "sell"})
+
+	if p.HasHoldings() {
+		t.Fatal("expected no holdings after full sell")
+	}
+	if !p.HasAnyData() {
+		t.Fatal("expected HasAnyData true when transaction history remains")
+	}
+
+	if err := p.Clear(); err != nil {
+		t.Fatalf("Clear() error = %v", err)
+	}
+	if p.HasAnyData() {
+		t.Fatal("expected empty portfolio after Clear()")
+	}
+}
+
+func TestPortfolio_RemoveCoinWithHistoryOnly(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "portfolio.json")
+	p := NewPortfolio(filePath)
+
+	_ = p.AddTransaction(Transaction{CoinID: "bitcoin", Symbol: "btc", Amount: 1, Price: 100, Currency: "usd", Type: "buy"})
+	_ = p.AddTransaction(Transaction{CoinID: "bitcoin", Symbol: "btc", Amount: 1, Price: 120, Currency: "usd", Type: "sell"})
+
+	if !p.HasCoinData("bitcoin") {
+		t.Fatal("expected HasCoinData true for history-only coin")
+	}
+	if err := p.RemoveCoin("bitcoin"); err != nil {
+		t.Fatalf("RemoveCoin() error = %v", err)
+	}
+	if p.HasCoinData("bitcoin") {
+		t.Fatal("expected coin data removed")
+	}
+}

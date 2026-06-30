@@ -29,11 +29,14 @@ var (
 	alertManager *models.AlertManager
 	alertChecker *service.AlertChecker
 	coinGecko    *service.CoinGecko
+	configStore  *models.ConfigStore
+	watchlist    *models.Watchlist
+	daemonState  *models.DaemonState
 	configDir    string
 	rootCmd      *cobra.Command
 )
 
-const Version = "v1.3.0"
+const Version = "v2.0.0"
 
 func init() {
 	rootCmd = &cobra.Command{
@@ -79,6 +82,8 @@ EXAMPLES:
 
   5. Set price alerts:
      crypto alert add bitcoin 50000 above   # Alert when price goes above
+     crypto alert watch                     # Monitor alerts (foreground)
+     crypto alert start                     # Monitor alerts (background)
      crypto alert list                      # View active alerts
 
 Use "crypto [command] --help" for more information about a command.`,
@@ -91,7 +96,7 @@ Use "crypto [command] --help" for more information about a command.`,
 				os.Exit(0)
 			}
 
-			currency, _ := cmd.Flags().GetString("currency")
+			currency := getCurrencyFlag(cmd)
 			if len(args) > 0 {
 				showGraph, _ := cmd.Flags().GetBool("graph")
 
@@ -131,10 +136,12 @@ Use "crypto [command] --help" for more information about a command.`,
 	rootCmd.PersistentFlags().String("to", "", "Chart end date (YYYY-MM-DD or YYYY-MM-DD HH:MM)")
 	rootCmd.PersistentFlags().Int("width", 80, "Chart width in characters")
 	rootCmd.PersistentFlags().Int("height", 20, "Chart height in characters")
+	rootCmd.PersistentFlags().Bool("no-color", false, "Disable colored terminal output")
 
 	// Add subcommands
 	rootCmd.AddCommand(alertCmd)
 	rootCmd.AddCommand(portfolioCmd)
+	rootCmd.AddCommand(newCompletionCmd())
 
 	// Initialize configuration
 	homeDir, err := os.UserHomeDir()
@@ -151,8 +158,18 @@ Use "crypto [command] --help" for more information about a command.`,
 
 	portfolio = models.NewPortfolio(filepath.Join(configDir, "portfolio.json"))
 	alertManager = models.NewAlertManager(configDir)
+	configStore = models.NewConfigStore(configDir)
+	watchlist = models.NewWatchlist(configDir)
+	daemonState = models.NewDaemonState(configDir)
 	alertChecker = service.NewAlertChecker(alertManager)
 	coinGecko = service.NewCoinGecko()
+
+	if err := configStore.Load(); err != nil {
+		fmt.Println("Error loading config:", err)
+	}
+	if err := watchlist.Load(); err != nil {
+		fmt.Println("Error loading watchlist:", err)
+	}
 
 	// Load existing portfolio and alerts
 	if err := portfolio.Load(); err != nil && !os.IsNotExist(err) {
@@ -164,10 +181,7 @@ Use "crypto [command] --help" for more information about a command.`,
 }
 
 func Execute() {
-	if len(alertManager.GetAlerts()) > 0 {
-		alertChecker.EnsureRunning()
-	}
-	defer alertChecker.Stop()
+	disableColorsIfNeeded()
 
 	go func() {
 		sigChan := make(chan os.Signal, 1)
@@ -194,6 +208,14 @@ func displayPriceGraph(coinID, currency string) {
 	toStr, _ := rootCmd.Flags().GetString("to")
 	chartWidth, _ := rootCmd.Flags().GetInt("width")
 	chartHeight, _ := rootCmd.Flags().GetInt("height")
+	if configStore != nil {
+		if chartWidth == 80 {
+			chartWidth = configStore.ChartWidthOrDefault(80)
+		}
+		if chartHeight == 20 {
+			chartHeight = configStore.ChartHeightOrDefault(20)
+		}
+	}
 
 	var fromDate, toDate *time.Time
 	if fromStr != "" {

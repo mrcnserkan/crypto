@@ -98,3 +98,31 @@ func TestAlertManager_LoadNormalizesCoinIDAndCurrency(t *testing.T) {
 		t.Fatalf("unexpected normalized alert: %+v", alerts[0])
 	}
 }
+
+func TestAlertManager_GetAlertsReturnsCopy(t *testing.T) {
+	dir := t.TempDir()
+	manager := NewAlertManager(dir)
+	_ = manager.AddAlert(Alert{CoinID: "bitcoin", Price: 100, Condition: "above", Currency: "usd"})
+
+	alerts := manager.GetAlerts()
+	alerts[0].CoinID = "mutated"
+
+	original := manager.GetAlerts()
+	if original[0].CoinID != "bitcoin" {
+		t.Fatalf("GetAlerts() should return defensive copy, got %s", original[0].CoinID)
+	}
+}
+
+func TestAlertManager_RemoveAlertByTarget(t *testing.T) {
+	dir := t.TempDir()
+	manager := NewAlertManager(dir)
+	_ = manager.AddAlert(Alert{CoinID: "bitcoin", Price: 50000, Condition: "above", Currency: "usd"})
+	_ = manager.AddAlert(Alert{CoinID: "bitcoin", Price: 45000, Condition: "below", Currency: "usd"})
+
+	if err := manager.RemoveAlertByTarget("bitcoin", 50000, "above"); err != nil {
+		t.Fatalf("RemoveAlertByTarget() error = %v", err)
+	}
+	if len(manager.GetAlerts()) != 1 {
+		t.Fatalf("expected 1 alert remaining, got %d", len(manager.GetAlerts()))
+	}
+}

@@ -37,9 +37,16 @@ EXAMPLES:
      crypto alert list                       # Show all active alerts
 
   3. Remove alerts:
-     crypto alert remove bitcoin             # Remove alerts for Bitcoin
+     crypto alert remove bitcoin             # Remove all alerts for a coin
+     crypto alert remove bitcoin 50000 above # Remove a specific alert
 
-NOTE: Alerts are checked every 5 minutes and notifications are shown in the terminal`,
+  4. Monitor alerts:
+     crypto alert watch                      # Foreground monitoring
+     crypto alert start                      # Background daemon
+     crypto alert stop                       # Stop daemon
+     crypto alert status                     # Daemon status
+
+NOTE: Alerts are NOT checked automatically. Run 'crypto alert watch' or 'crypto alert start' after adding alerts.`,
 }
 
 var alertAddCmd = &cobra.Command{
@@ -90,8 +97,6 @@ EXAMPLES:
 			os.Exit(1)
 		}
 
-		alertChecker.EnsureRunning()
-
 		titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
 		fmt.Printf("\n%s Alert added successfully!\n", titleColor("🔔"))
 		fmt.Printf("You will be notified when %s goes %s %s%.2f\n",
@@ -99,6 +104,7 @@ EXAMPLES:
 			condition,
 			utils.CurrencySymbol(currency),
 			price)
+		fmt.Println("\nRun `crypto alert watch` (foreground) or `crypto alert start` (background) to monitor alerts.")
 	},
 }
 
@@ -163,20 +169,44 @@ EXAMPLE:
 }
 
 var alertRemoveCmd = &cobra.Command{
-	Use:   "remove [coin-id]",
+	Use:   "remove [coin-id] [price] [above/below]",
 	Short: "Remove price alert",
-	Long: `Remove all price alerts for a specific cryptocurrency.
+	Long: `Remove price alerts for a cryptocurrency.
 
 ARGUMENTS:
   coin-id  ID of the cryptocurrency (e.g., bitcoin)
+  price    Optional target price (requires condition)
+  type     Optional alert type: 'above' or 'below'
 
-EXAMPLE:
-  crypto alert remove bitcoin`,
-	Args: cobra.ExactArgs(1),
+EXAMPLES:
+  crypto alert remove bitcoin                    # Remove all alerts for Bitcoin
+  crypto alert remove bitcoin 50000 above        # Remove specific alert`,
+	Args: cobra.RangeArgs(1, 3),
 	Run: func(cmd *cobra.Command, args []string) {
 		coinID := utils.NormalizeCoinID(args[0])
-		if err := alertManager.RemoveAlert(coinID); err != nil {
-			fmt.Printf("Error: %v\n", err)
+
+		if len(args) == 1 {
+			if err := alertManager.RemoveAlertsForCoin(coinID); err != nil {
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+		} else if len(args) == 3 {
+			price, err := strconv.ParseFloat(args[1], 64)
+			if err != nil || price <= 0 {
+				fmt.Println("Error: Invalid price value (must be greater than zero)")
+				os.Exit(1)
+			}
+			condition := strings.ToLower(args[2])
+			if condition != "above" && condition != "below" {
+				fmt.Println("Error: Condition must be 'above' or 'below'")
+				os.Exit(1)
+			}
+			if err := alertManager.RemoveAlertByTarget(coinID, price, condition); err != nil {
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Println("Error: Provide coin-id only, or coin-id + price + condition")
 			os.Exit(1)
 		}
 

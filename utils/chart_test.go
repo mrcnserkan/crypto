@@ -101,3 +101,34 @@ func TestPriceToRowMaxAtTop(t *testing.T) {
 		t.Fatal("min price should be bottom row")
 	}
 }
+
+func TestFilterOHLCByDateRange(t *testing.T) {
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC).Unix() * 1000
+	data := []models.OHLC{
+		{Time: base, Open: 100, High: 110, Low: 95, Close: 105},
+		{Time: base + 86400000, Open: 105, High: 115, Low: 100, Close: 102},
+		{Time: base + 172800000, Open: 102, High: 108, Low: 98, Close: 107},
+	}
+	from := time.UnixMilli(base + 43200000)
+	to := time.UnixMilli(base + 129600000)
+
+	filtered := FilterOHLCByDateRange(data, &from, &to)
+	if len(filtered) != 1 || filtered[0].Close != 102 {
+		t.Fatalf("FilterOHLCByDateRange() = %+v", filtered)
+	}
+}
+
+func TestDownsampleLTTBPreservesEndpoints(t *testing.T) {
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	points := make([]SeriesPoint, 100)
+	for i := range points {
+		points[i] = SeriesPoint{Time: base.Add(time.Duration(i) * time.Hour), Value: float64(i)}
+	}
+	out := downsampleLTTB(points, 10)
+	if len(out) != 10 {
+		t.Fatalf("expected 10 points, got %d", len(out))
+	}
+	if out[0].Value != 0 || out[len(out)-1].Value != 99 {
+		t.Fatalf("LTTB should preserve first and last values, got %.0f and %.0f", out[0].Value, out[len(out)-1].Value)
+	}
+}

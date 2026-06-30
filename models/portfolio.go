@@ -107,12 +107,53 @@ func (p *Portfolio) HasHoldings() bool {
 	return len(p.Holdings) > 0
 }
 
+// HasAnyData returns true if portfolio has holdings or transaction history.
+func (p *Portfolio) HasAnyData() bool {
+	p.pruneDustHoldings()
+	return len(p.Holdings) > 0 || len(p.Transactions) > 0
+}
+
+// HasCoinData returns true if the coin has holdings or transaction history.
+func (p *Portfolio) HasCoinData(coinID string) bool {
+	coinID = strings.ToLower(strings.TrimSpace(coinID))
+	if amount, ok := p.Holdings[coinID]; ok && !isEffectivelyZero(amount) {
+		return true
+	}
+	for _, t := range p.Transactions {
+		if t.CoinID == coinID {
+			return true
+		}
+	}
+	return false
+}
+
+// Clear removes all holdings and transactions.
+func (p *Portfolio) Clear() error {
+	p.Holdings = make(map[string]float64)
+	p.Transactions = []Transaction{}
+	return p.Save()
+}
+
+// RemoveCoin removes a coin from holdings and its transaction history.
+func (p *Portfolio) RemoveCoin(coinID string) error {
+	coinID = strings.ToLower(strings.TrimSpace(coinID))
+	delete(p.Holdings, coinID)
+	filtered := make([]Transaction, 0, len(p.Transactions))
+	for _, t := range p.Transactions {
+		if t.CoinID != coinID {
+			filtered = append(filtered, t)
+		}
+	}
+	p.Transactions = filtered
+	return p.Save()
+}
+
 func (p *Portfolio) Save() error {
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p.FilePath, data, privateFileMode)
+	return atomicWriteFile(p.FilePath, data)
 }
 
 func (p *Portfolio) Load() error {
@@ -120,11 +161,19 @@ func (p *Portfolio) Load() error {
 	if err != nil {
 		return err
 	}
+	before := string(data)
 	if err := json.Unmarshal(data, p); err != nil {
 		return err
 	}
 	p.normalizeLoadedData()
-	return p.Save()
+	after, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return err
+	}
+	if string(after) != before {
+		return p.Save()
+	}
+	return nil
 }
 
 func (p *Portfolio) normalizeLoadedData() {
@@ -139,17 +188,4 @@ func (p *Portfolio) normalizeLoadedData() {
 	for i := range p.Transactions {
 		normalizeTransaction(&p.Transactions[i])
 	}
-}
-
-func (p *Portfolio) CalculateValue(prices map[string]float64) float64 {
-	totalValue := 0.0
-	for coinID, amount := range p.Holdings {
-		if isEffectivelyZero(amount) {
-			continue
-		}
-		if price, ok := prices[coinID]; ok {
-			totalValue += amount * price
-		}
-	}
-	return totalValue
 }

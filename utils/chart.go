@@ -35,7 +35,7 @@ func DefaultChartConfig() ChartConfig {
 	}
 }
 
-// ParseChartDate parses YYYY-MM-DD or YYYY-MM-DD HH:MM.
+// ParseChartDate parses YYYY-MM-DD or YYYY-MM-DD HH:MM in UTC.
 func ParseChartDate(s string) (time.Time, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -43,11 +43,11 @@ func ParseChartDate(s string) (time.Time, error) {
 	}
 	layouts := []string{"2006-01-02 15:04", "2006-01-02"}
 	for _, layout := range layouts {
-		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
-			return t, nil
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("invalid date format %q (use YYYY-MM-DD or YYYY-MM-DD HH:MM)", s)
+	return time.Time{}, fmt.Errorf("invalid date format %q (use YYYY-MM-DD or YYYY-MM-DD HH:MM, UTC)", s)
 }
 
 // FilterSeriesByDateRange keeps points within [from, to] inclusive.
@@ -148,7 +148,7 @@ func RenderLineChart(points []SeriesPoint, cfg ChartConfig) string {
 	}
 	cfg = normalizeChartConfig(cfg)
 
-	points = downsampleSeries(points, cfg.Width)
+	points = downsampleLTTB(points, cfg.Width)
 	minP, maxP := seriesMinMax(points)
 	minP, maxP = padPriceRange(minP, maxP)
 
@@ -239,11 +239,6 @@ func RenderCandleChart(data []models.OHLC, cfg ChartConfig) string {
 
 	series := ohlcToSeries(data)
 	return assembleChart(plot, yLabels, yAxisWidth, cfg, series)
-}
-
-// GenerateCandleChart is kept for backward compatibility; delegates to RenderCandleChart.
-func GenerateCandleChart(data []models.OHLC) string {
-	return RenderCandleChart(data, DefaultChartConfig())
 }
 
 func normalizeChartConfig(cfg ChartConfig) ChartConfig {
@@ -474,6 +469,62 @@ func placeXLabel(line []rune, label string, pos, width, align int) {
 			line[x] = ch
 		}
 	}
+}
+
+func downsampleLTTB(points []SeriesPoint, threshold int) []SeriesPoint {
+	if len(points) <= threshold || threshold < 3 {
+		return points
+	}
+
+	result := make([]SeriesPoint, 0, threshold)
+	result = append(result, points[0])
+
+	bucketSize := float64(len(points)-2) / float64(threshold-2)
+	a := 0
+
+	for i := 0; i < threshold-2; i++ {
+		start := int(float64(i)*bucketSize) + 1
+		end := int(float64(i+1)*bucketSize) + 1
+		if end >= len(points) {
+			end = len(points) - 1
+		}
+
+		rangeStart := int(float64(i+1)*bucketSize) + 1
+		rangeEnd := int(float64(i+2)*bucketSize) + 1
+		if rangeEnd >= len(points) {
+			rangeEnd = len(points)
+		}
+
+		avgX, avgY := 0.0, 0.0
+		count := rangeEnd - rangeStart
+		if count <= 0 {
+			continue
+		}
+		for j := rangeStart; j < rangeEnd; j++ {
+			avgX += float64(j)
+			avgY += points[j].Value
+		}
+		avgX /= float64(count)
+		avgY /= float64(count)
+
+		maxArea := -1.0
+		nextIdx := start
+		for j := start; j < end; j++ {
+			area := math.Abs(
+				(float64(a)-avgX)*(points[j].Value-points[a].Value) -
+					(float64(a)-float64(j))*(avgY-points[a].Value),
+			)
+			if area > maxArea {
+				maxArea = area
+				nextIdx = j
+			}
+		}
+		result = append(result, points[nextIdx])
+		a = nextIdx
+	}
+
+	result = append(result, points[len(points)-1])
+	return result
 }
 
 func downsampleSeries(points []SeriesPoint, maxPoints int) []SeriesPoint {

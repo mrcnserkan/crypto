@@ -8,7 +8,6 @@ package utils
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -65,18 +64,6 @@ func Int64FromCurrencyMap(values map[string]int64, currency string) (int64, erro
 		return 0, fmt.Errorf("unsupported or invalid currency: %s", strings.ToUpper(currency))
 	}
 	return value, nil
-}
-
-func ClearCoinName(coinName string) string {
-	blankRegex := regexp.MustCompile(`[. ]`)
-	specialCharRegex := regexp.MustCompile(`[(\[\])]`)
-	return strings.ToLower(
-		specialCharRegex.ReplaceAllString(
-			blankRegex.ReplaceAllString(
-				coinName, "-",
-			), "",
-		),
-	)
 }
 
 func GetCaption() string {
