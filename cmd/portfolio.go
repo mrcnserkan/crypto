@@ -79,8 +79,7 @@ EXAMPLES:
 			os.Exit(1)
 		}
 
-		currency, _ := portfolioCmd.PersistentFlags().GetString("currency")
-		currency = utils.NormalizeCurrency(currency)
+		currency := getCurrencyFlag(cmd)
 
 		coin, err := coinGecko.GetCoinDetail(coinID)
 		if err != nil {
@@ -139,8 +138,7 @@ EXAMPLES:
 			return
 		}
 
-		currency, _ := cmd.Flags().GetString("currency")
-		currency = utils.NormalizeCurrency(currency)
+		currency := getCurrencyFlag(cmd)
 		currencySymbol := utils.CurrencySymbol(currency)
 
 		coinIDs := make([]string, 0, len(portfolio.Holdings))
@@ -155,17 +153,26 @@ EXAMPLES:
 		}
 
 		coinByID := make(map[string]models.Coin, len(coins))
+		prices := make(map[string]float64, len(coins))
 		for _, coin := range coins {
 			coinByID[coin.ID] = coin
+			prices[coin.ID] = coin.CurrentPrice
 		}
 
-		totalValue := 0.0
+		pnlData := models.ComputePortfolioPnL(portfolio, prices, currency)
+		if pnlData.HasMixedCurrency {
+			warnColor := color.New(color.FgYellow).SprintFunc()
+			fmt.Println(warnColor("Warning: Mixed transaction currencies detected. P&L is approximate."))
+		}
+
+		totalValue := pnlData.TotalValue
+		totalPnL := pnlData.TotalUnrealizedPnL
 		titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
 
 		fmt.Printf("\n%s %s\n\n", titleColor("💼"), titleColor("Portfolio Holdings"))
 
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Coin", "Amount", "Price", "Value", "24h Change"})
+		table.SetHeader([]string{"Coin", "Amount", "Avg Cost", "Price", "Value", "P&L", "P&L %", "24h"})
 		table.SetBorder(false)
 		table.SetHeaderColor(
 			tablewriter.Colors{tablewriter.FgHiBlueColor},
@@ -173,52 +180,57 @@ EXAMPLES:
 			tablewriter.Colors{tablewriter.FgHiBlueColor},
 			tablewriter.Colors{tablewriter.FgHiBlueColor},
 			tablewriter.Colors{tablewriter.FgHiBlueColor},
+			tablewriter.Colors{tablewriter.FgHiBlueColor},
+			tablewriter.Colors{tablewriter.FgHiBlueColor},
+			tablewriter.Colors{tablewriter.FgHiBlueColor},
 		)
 
-		for coinID, amount := range portfolio.Holdings {
-			if utils.IsEffectivelyZero(amount) {
-				continue
-			}
-
-			coin, ok := coinByID[coinID]
+		for _, coinPnL := range pnlData.Coins {
+			coin, ok := coinByID[coinPnL.CoinID]
 			if !ok {
-				fmt.Printf("Error fetching price for %s: coin not found in market data\n", coinID)
+				fmt.Printf("Error fetching price for %s: coin not found in market data\n", coinPnL.CoinID)
 				continue
 			}
 
-			currentPrice := coin.CurrentPrice
-			value := amount * currentPrice
-			totalValue += value
 			change24h := coin.PriceChangePercentage24h
 
 			table.Rich([]string{
 				fmt.Sprintf("%s (%s)", coin.Name, strings.ToUpper(coin.Symbol)),
-				fmt.Sprintf("%.6f", amount),
-				fmt.Sprintf("%s%s", currencySymbol, utils.FormatCurrency(currentPrice)),
-				fmt.Sprintf("%s%s", currencySymbol, utils.FormatCurrency(value)),
+				fmt.Sprintf("%.6f", coinPnL.Amount),
+				fmt.Sprintf("%s%s", currencySymbol, utils.FormatCurrency(coinPnL.AvgCost)),
+				fmt.Sprintf("%s%s", currencySymbol, utils.FormatCurrency(coinPnL.CurrentPrice)),
+				fmt.Sprintf("%s%s", currencySymbol, utils.FormatCurrency(coinPnL.CurrentValue)),
+				fmt.Sprintf("%s%s", currencySymbol, utils.FormatCurrency(coinPnL.UnrealizedPnL)),
+				fmt.Sprintf("%.2f%%", coinPnL.UnrealizedPnLPct),
 				fmt.Sprintf("%.2f%%", change24h),
 			}, []tablewriter.Colors{
 				{tablewriter.FgHiWhiteColor},
 				{tablewriter.FgHiWhiteColor},
 				{tablewriter.FgHiWhiteColor},
 				{tablewriter.FgHiWhiteColor},
+				{tablewriter.FgHiWhiteColor},
+				utils.GetCellColorFromPriceChange(coinPnL.UnrealizedPnLPct),
+				utils.GetCellColorFromPriceChange(coinPnL.UnrealizedPnLPct),
 				utils.GetCellColorFromPriceChange(change24h),
 			})
 		}
 
 		table.SetFooter([]string{
-			"Total Value",
+			"Total",
+			"",
 			"",
 			"",
 			fmt.Sprintf("%s%s", currencySymbol, utils.FormatCurrency(totalValue)),
+			fmt.Sprintf("%s%s", currencySymbol, utils.FormatCurrency(totalPnL)),
+			"",
 			"",
 		})
 		table.SetFooterColor(
 			tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiCyanColor},
-			nil,
-			nil,
+			nil, nil, nil,
 			tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiCyanColor},
-			nil,
+			tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiCyanColor},
+			nil, nil,
 		)
 
 		table.Render()
@@ -305,7 +317,7 @@ THIS COMMAND WILL:
 EXAMPLE:
   crypto portfolio clear`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if !portfolio.HasHoldings() {
+		if !portfolio.HasAnyData() {
 			titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
 			fmt.Printf("\n%s %s\n", titleColor("💼"), titleColor("Portfolio is already empty"))
 			return
@@ -319,9 +331,7 @@ EXAMPLE:
 			return
 		}
 
-		portfolio.Holdings = make(map[string]float64)
-		portfolio.Transactions = []models.Transaction{}
-		if err := portfolio.Save(); err != nil {
+		if err := portfolio.Clear(); err != nil {
 			fmt.Printf("Error clearing portfolio: %v\n", err)
 			os.Exit(1)
 		}
@@ -351,12 +361,12 @@ EXAMPLE:
 	Run: func(cmd *cobra.Command, args []string) {
 		coinID := utils.NormalizeCoinID(args[0])
 
-		amount, exists := portfolio.Holdings[coinID]
-		if !exists {
+		if !portfolio.HasCoinData(coinID) {
 			fmt.Printf("Error: %s is not in your portfolio\n", coinID)
 			os.Exit(1)
 		}
 
+		amount := portfolio.GetHolding(coinID)
 		fmt.Printf("\nAre you sure you want to remove %s (Amount: %.6f) from your portfolio? (y/N): ",
 			strings.ToUpper(coinID), amount)
 		var response string
@@ -366,17 +376,7 @@ EXAMPLE:
 			return
 		}
 
-		delete(portfolio.Holdings, coinID)
-
-		newTransactions := []models.Transaction{}
-		for _, t := range portfolio.Transactions {
-			if t.CoinID != coinID {
-				newTransactions = append(newTransactions, t)
-			}
-		}
-		portfolio.Transactions = newTransactions
-
-		if err := portfolio.Save(); err != nil {
+		if err := portfolio.RemoveCoin(coinID); err != nil {
 			fmt.Printf("Error removing coin: %v\n", err)
 			os.Exit(1)
 		}
@@ -388,7 +388,6 @@ EXAMPLE:
 }
 
 func init() {
-	portfolioCmd.PersistentFlags().String("currency", "usd", "Currency for portfolio valuation")
 	portfolioCmd.AddCommand(portfolioAddCmd)
 	portfolioCmd.AddCommand(portfolioListCmd)
 	portfolioCmd.AddCommand(portfolioHistoryCmd)

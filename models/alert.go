@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-const privateFileMode = 0o600
-
 type Alert struct {
 	CoinID    string    `json:"coin_id"`
 	Price     float64   `json:"price"`
@@ -75,6 +73,11 @@ func (am *AlertManager) AddAlert(alert Alert) error {
 }
 
 func (am *AlertManager) RemoveAlert(coinID string) error {
+	return am.RemoveAlertsForCoin(coinID)
+}
+
+// RemoveAlertsForCoin removes all alerts for a coin.
+func (am *AlertManager) RemoveAlertsForCoin(coinID string) error {
 	coinID = strings.ToLower(strings.TrimSpace(coinID))
 
 	var remaining []Alert
@@ -109,8 +112,32 @@ func (am *AlertManager) RemoveTriggeredAlert(alert Alert) error {
 	return fmt.Errorf("triggered alert not found for coin: %s", alert.CoinID)
 }
 
+// RemoveAlertByTarget removes a specific alert by coin, price, and condition.
+func (am *AlertManager) RemoveAlertByTarget(coinID string, price float64, condition string) error {
+	coinID = strings.ToLower(strings.TrimSpace(coinID))
+	condition = strings.ToLower(strings.TrimSpace(condition))
+
+	var remaining []Alert
+	removed := false
+	for _, alert := range am.alerts {
+		if alert.CoinID == coinID && alert.Price == price && alert.Condition == condition {
+			removed = true
+			continue
+		}
+		remaining = append(remaining, alert)
+	}
+	if !removed {
+		return fmt.Errorf("alert not found for %s at %.2f %s", coinID, price, condition)
+	}
+	am.alerts = remaining
+	return am.Save()
+}
+
 func (am *AlertManager) GetAlerts() []Alert {
-	return am.alerts
+	if len(am.alerts) == 0 {
+		return nil
+	}
+	return append([]Alert(nil), am.alerts...)
 }
 
 func (am *AlertManager) Load() error {
@@ -128,7 +155,10 @@ func (am *AlertManager) Load() error {
 	if err == nil {
 		am.alerts = alerts
 		am.normalizeLoadedAlerts()
-		return am.Save()
+		if am.needsMigration(alerts) {
+			return am.Save()
+		}
+		return nil
 	}
 
 	// Try to load old format
@@ -143,6 +173,15 @@ func (am *AlertManager) Load() error {
 	return am.Save()
 }
 
+func (am *AlertManager) needsMigration(alerts []Alert) bool {
+	for _, alert := range alerts {
+		if alert.Currency == "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (am *AlertManager) normalizeLoadedAlerts() {
 	for i := range am.alerts {
 		normalizeAlert(&am.alerts[i])
@@ -154,6 +193,5 @@ func (am *AlertManager) Save() error {
 	if err != nil {
 		return err
 	}
-
-	return os.WriteFile(am.alertFile, data, privateFileMode)
+	return atomicWriteFile(am.alertFile, data)
 }

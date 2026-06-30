@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrcnserkan/crypto/models"
 )
@@ -122,4 +123,87 @@ func TestAlertChecker_StopIsIdempotent(t *testing.T) {
 	checker.Start()
 	checker.Stop()
 	checker.Stop()
+}
+
+func TestCoinGecko_GetSimplePrices(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/simple/price") {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"bitcoin":{"usd":50000},"ethereum":{"usd":3000}}`))
+	}))
+	defer server.Close()
+
+	originalBaseURL := BaseURL
+	t.Cleanup(func() { BaseURL = originalBaseURL })
+	BaseURL = server.URL
+
+	cg := NewCoinGecko()
+	prices, err := cg.GetSimplePrices([]string{"bitcoin", "ethereum"}, "usd")
+	if err != nil {
+		t.Fatalf("GetSimplePrices() error = %v", err)
+	}
+	if prices["bitcoin"] != 50000 || prices["ethereum"] != 3000 {
+		t.Fatalf("unexpected prices: %+v", prices)
+	}
+}
+
+func TestCoinGecko_GetRetriesOn5xx(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer server.Close()
+
+	originalBaseURL := BaseURL
+	t.Cleanup(func() { BaseURL = originalBaseURL })
+	BaseURL = server.URL
+
+	cg := NewCoinGecko()
+	if _, err := cg.GetMarkets("usd", 10, 1); err != nil {
+		t.Fatalf("GetMarkets() error = %v", err)
+	}
+	if attempts < 2 {
+		t.Fatalf("expected retry on 5xx, attempts = %d", attempts)
+	}
+}
+
+func TestSelectIntervalForRange(t *testing.T) {
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(10 * 24 * time.Hour)
+	interval := SelectIntervalForRange(from, to)
+	if interval.Days != 14 {
+		t.Fatalf("expected 14d interval, got %+v", interval)
+	}
+}
+
+func TestAlertChecker_TriggersAndRemovesAlert(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"bitcoin":{"usd":51000}}`))
+	}))
+	defer server.Close()
+
+	originalBaseURL := BaseURL
+	t.Cleanup(func() { BaseURL = originalBaseURL })
+	BaseURL = server.URL
+
+	dir := t.TempDir()
+	manager := models.NewAlertManager(dir)
+	checker := NewAlertChecker(manager)
+	checker.coinGecko = NewCoinGecko()
+
+	_ = manager.AddAlert(models.Alert{CoinID: "bitcoin", Price: 50000, Condition: "above", Currency: "usd"})
+	checker.RunOnce()
+
+	if len(manager.GetAlerts()) != 0 {
+		t.Fatalf("expected triggered alert removed, got %d alerts", len(manager.GetAlerts()))
+	}
 }

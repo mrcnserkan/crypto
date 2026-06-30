@@ -10,8 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mrcnserkan/crypto/models"
@@ -24,7 +24,14 @@ const (
 	DEFAULT_CURRENCY_SYMBOL = "$"
 	PER_PAGE                = "10"
 	maxHTTPRetries          = 3
+	ohlcMaxDays             = 365
 )
+
+func init() {
+	if os.Getenv("COINGECKO_API_KEY") != "" {
+		setGlobalRateLimiter(proRateLimitPerMinute)
+	}
+}
 
 var BaseURL = "https://api.coingecko.com/api/v3"
 
@@ -60,14 +67,24 @@ func NewCoinGecko() *CoinGecko {
 }
 
 func (cg *CoinGecko) get(requestURL string) ([]byte, error) {
+	waitForRateLimit()
+
 	var lastErr error
+	backoff := 500 * time.Millisecond
 
 	for attempt := 0; attempt < maxHTTPRetries; attempt++ {
 		if attempt > 0 {
-			time.Sleep(time.Duration(attempt) * time.Second)
+			time.Sleep(backoff)
+			backoff *= 2
 		}
 
-		resp, err := cg.client.Get(requestURL)
+		req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		cg.applyAPIKey(req)
+
+		resp, err := cg.client.Do(req)
 		if err != nil {
 			lastErr = err
 			continue
@@ -83,8 +100,9 @@ func (cg *CoinGecko) get(requestURL string) ([]byte, error) {
 		switch resp.StatusCode {
 		case http.StatusOK:
 			return body, nil
-		case http.StatusTooManyRequests:
-			lastErr = fmt.Errorf("rate limit exceeded")
+		case http.StatusTooManyRequests, http.StatusInternalServerError,
+			http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			lastErr = fmt.Errorf("API error: %s", resp.Status)
 			continue
 		default:
 			return nil, fmt.Errorf("API error: %s", resp.Status)
@@ -95,6 +113,18 @@ func (cg *CoinGecko) get(requestURL string) ([]byte, error) {
 		lastErr = fmt.Errorf("request failed after %d attempts", maxHTTPRetries)
 	}
 	return nil, lastErr
+}
+
+func (cg *CoinGecko) applyAPIKey(req *http.Request) {
+	apiKey := os.Getenv("COINGECKO_API_KEY")
+	if apiKey == "" {
+		return
+	}
+	header := os.Getenv("COINGECKO_API_HEADER")
+	if header == "" {
+		header = "x-cg-demo-api-key"
+	}
+	req.Header.Set(header, apiKey)
 }
 
 func (cg *CoinGecko) GetMarkets(currency string, perPage int, page int) ([]models.Coin, error) {
@@ -205,6 +235,51 @@ func (cg *CoinGecko) SearchCoins(query string) (models.SearchResponse, error) {
 	return searchResult, nil
 }
 
+func (cg *CoinGecko) GetSimplePrices(ids []string, currency string) (map[string]float64, error) {
+	if len(ids) == 0 {
+		return map[string]float64{}, nil
+	}
+
+	normalized := make([]string, 0, len(ids))
+	seen := make(map[string]struct{})
+	for _, id := range ids {
+		id = strings.ToLower(strings.TrimSpace(id))
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+	}
+	if len(normalized) == 0 {
+		return map[string]float64{}, nil
+	}
+
+	currency = utils.NormalizeCurrency(currency)
+	requestURL := fmt.Sprintf("%s/simple/price?ids=%s&vs_currencies=%s",
+		BaseURL, strings.Join(normalized, ","), currency)
+
+	bodyBytes, err := cg.get(requestURL)
+	if err != nil {
+		return nil, err
+	}
+
+	var raw map[string]map[string]float64
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+		return nil, fmt.Errorf("decode error: %v", err)
+	}
+
+	prices := make(map[string]float64, len(raw))
+	for id, values := range raw {
+		if price, ok := values[currency]; ok {
+			prices[id] = price
+		}
+	}
+	return prices, nil
+}
+
 func (cg *CoinGecko) GetCoinPriceHistory(id, currency string, interval string) ([][]float64, error) {
 	selectedInterval := selectInterval(interval)
 
@@ -229,9 +304,13 @@ func (cg *CoinGecko) GetCoinPriceHistory(id, currency string, interval string) (
 
 func (cg *CoinGecko) GetCoinOHLC(id, currency string, interval string) ([]models.OHLC, error) {
 	selectedInterval := selectInterval(interval)
+	days := selectedInterval.Days
+	if days <= 0 {
+		days = ohlcMaxDays
+	}
 
 	requestURL := fmt.Sprintf("%s/coins/%s/ohlc?vs_currency=%s&days=%d",
-		BaseURL, strings.ToLower(strings.TrimSpace(id)), strings.ToLower(currency), selectedInterval.Days)
+		BaseURL, strings.ToLower(strings.TrimSpace(id)), strings.ToLower(currency), days)
 
 	bodyBytes, err := cg.get(requestURL)
 	if err != nil {
@@ -295,138 +374,9 @@ func SelectIntervalForRange(from, to time.Time) Interval {
 	return best
 }
 
-// DaysFromNow returns days from t until now (minimum 1).
-func DaysFromNow(t time.Time) int {
-	days := int(time.Since(t).Hours()/24) + 1
-	if days < 1 {
-		return 1
+func effectiveDays(interval Interval) int {
+	if interval.Days <= 0 {
+		return ohlcMaxDays
 	}
-	return days
-}
-
-type AlertChecker struct {
-	alertManager *models.AlertManager
-	coinGecko    *CoinGecko
-	stopChan     chan struct{}
-	doneChan     chan struct{}
-	mu           sync.Mutex
-}
-
-func NewAlertChecker(alertManager *models.AlertManager) *AlertChecker {
-	return &AlertChecker{
-		alertManager: alertManager,
-		coinGecko:    NewCoinGecko(),
-	}
-}
-
-func (ac *AlertChecker) EnsureRunning() {
-	if len(ac.alertManager.GetAlerts()) == 0 {
-		return
-	}
-	ac.Start()
-}
-
-func (ac *AlertChecker) Start() {
-	ac.mu.Lock()
-	if ac.stopChan != nil {
-		ac.mu.Unlock()
-		return
-	}
-
-	ac.stopChan = make(chan struct{})
-	ac.doneChan = make(chan struct{})
-	stopChan := ac.stopChan
-	doneChan := ac.doneChan
-	ac.mu.Unlock()
-
-	go func() {
-		defer close(doneChan)
-
-		ticker := time.NewTicker(5 * time.Minute)
-		rateLimiter := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		defer rateLimiter.Stop()
-
-		ac.runAlertChecks(rateLimiter.C, stopChan)
-
-		for {
-			select {
-			case <-stopChan:
-				return
-			case <-ticker.C:
-				if len(ac.alertManager.GetAlerts()) == 0 {
-					return
-				}
-				ac.runAlertChecks(rateLimiter.C, stopChan)
-			}
-		}
-	}()
-}
-
-func (ac *AlertChecker) runAlertChecks(rateLimiter <-chan time.Time, stopChan <-chan struct{}) {
-	alerts := ac.alertManager.GetAlerts()
-	for _, alert := range alerts {
-		select {
-		case <-rateLimiter:
-			ac.checkAlert(alert)
-		case <-stopChan:
-			return
-		}
-	}
-}
-
-func (ac *AlertChecker) Stop() {
-	ac.mu.Lock()
-	if ac.stopChan == nil {
-		ac.mu.Unlock()
-		return
-	}
-
-	close(ac.stopChan)
-	doneChan := ac.doneChan
-	ac.stopChan = nil
-	ac.doneChan = nil
-	ac.mu.Unlock()
-
-	<-doneChan
-}
-
-func (ac *AlertChecker) checkAlert(alert models.Alert) {
-	coin, err := ac.coinGecko.GetCoinDetail(alert.CoinID)
-	if err != nil {
-		fmt.Printf("Error checking alert for %s: %v\n", alert.CoinID, err)
-		return
-	}
-
-	currency := utils.NormalizeCurrency(alert.Currency)
-
-	currentPrice, err := utils.PriceFromCurrencyMap(coin.MarketData.CurrentPrice, currency)
-	if err != nil {
-		fmt.Printf("Error checking alert for %s: %v\n", alert.CoinID, err)
-		return
-	}
-
-	if (alert.Condition == "above" && currentPrice >= alert.Price) ||
-		(alert.Condition == "below" && currentPrice <= alert.Price) {
-		ac.sendNotification(alert, currentPrice)
-		if err := ac.alertManager.RemoveTriggeredAlert(alert); err != nil {
-			fmt.Printf("Error removing triggered alert for %s: %v\n", alert.CoinID, err)
-		}
-	}
-}
-
-func (ac *AlertChecker) sendNotification(alert models.Alert, currentPrice float64) {
-	currency := utils.NormalizeCurrency(alert.Currency)
-	currencySymbol := utils.CurrencySymbol(currency)
-
-	message := fmt.Sprintf("🚨 Price Alert: %s is %s %s%.2f (Target: %s%.2f %s)",
-		strings.ToUpper(alert.CoinID),
-		alert.Condition,
-		currencySymbol,
-		currentPrice,
-		currencySymbol,
-		alert.Price,
-		strings.ToUpper(currency))
-
-	fmt.Printf("\n%s\n", message)
+	return interval.Days
 }
