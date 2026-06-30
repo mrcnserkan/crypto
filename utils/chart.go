@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrcnserkan/crypto/models"
+	"github.com/mrcnserkan/crypto/v2/models"
 )
 
 // ChartConfig controls terminal chart rendering.

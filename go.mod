@@ -1,4 +1,4 @@
-module github.com/mrcnserkan/crypto
+module github.com/mrcnserkan/crypto/v2
 
 go 1.21
 

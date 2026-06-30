@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/mrcnserkan/crypto/models"
-	"github.com/mrcnserkan/crypto/service"
-	"github.com/mrcnserkan/crypto/utils"
+	"github.com/mrcnserkan/crypto/v2/models"
+	"github.com/mrcnserkan/crypto/v2/service"
+	"github.com/mrcnserkan/crypto/v2/utils"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/language"
@@ -36,7 +36,7 @@ var (
 	rootCmd      *cobra.Command
 )
 
-const Version = "v2.0.0"
+const Version = "v2.0.1"
 
 func init() {
 	rootCmd = &cobra.Command{

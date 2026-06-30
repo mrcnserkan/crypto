@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrcnserkan/crypto/models"
-	"github.com/mrcnserkan/crypto/utils"
+	"github.com/mrcnserkan/crypto/v2/models"
+	"github.com/mrcnserkan/crypto/v2/utils"
 )
 
 const (

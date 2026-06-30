@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mrcnserkan/crypto/models"
+	"github.com/mrcnserkan/crypto/v2/models"
 	"github.com/spf13/cobra"
 )
 
@@ -52,8 +52,8 @@ func TestAlertListEmpty(t *testing.T) {
 }
 
 func TestVersionConstant(t *testing.T) {
-	if Version != "v2.0.0" {
-		t.Fatalf("Version = %q, want v2.0.0", Version)
+	if Version != "v2.0.1" {
+		t.Fatalf("Version = %q, want v2.0.1", Version)
 	}
 }
 

@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/mrcnserkan/crypto/models"
-	"github.com/mrcnserkan/crypto/service"
-	"github.com/mrcnserkan/crypto/utils"
+	"github.com/mrcnserkan/crypto/v2/models"
+	"github.com/mrcnserkan/crypto/v2/service"
+	"github.com/mrcnserkan/crypto/v2/utils"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )

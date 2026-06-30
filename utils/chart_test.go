@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrcnserkan/crypto/models"
+	"github.com/mrcnserkan/crypto/v2/models"
 )
 
 func TestParseChartDate(t *testing.T) {

@@ -1,6 +1,6 @@
 # crypto
 
-<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v2.0.0" target="_blank"><img src="https://img.shields.io/badge/version-v2.0.0-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
+<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v2.0.1" target="_blank"><img src="https://img.shields.io/badge/version-v2.0.1-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
 
 <p>A powerful and user-friendly CLI tool for real-time cryptocurrency tracking, portfolio management, and market analysis.</p>
 
@@ -29,7 +29,7 @@
 ### Quick Install
 
 ```bash
-go install github.com/mrcnserkan/crypto@v2.0.0
+go install github.com/mrcnserkan/crypto/v2@v2.0.1
 ```
 
 ### Build from Source

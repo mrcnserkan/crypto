@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrcnserkan/crypto/models"
+	"github.com/mrcnserkan/crypto/v2/models"
 )
 
 func TestCoinGecko_SearchCoinsEncodesQuery(t *testing.T) {
