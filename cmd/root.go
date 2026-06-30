@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/guptarohit/asciigraph"
 	"github.com/mrcnserkan/crypto/models"
 	"github.com/mrcnserkan/crypto/service"
 	"github.com/mrcnserkan/crypto/utils"
@@ -34,7 +33,7 @@ var (
 	rootCmd      *cobra.Command
 )
 
-const Version = "v1.2.4"
+const Version = "v1.3.0"
 
 func init() {
 	rootCmd = &cobra.Command{
@@ -67,9 +66,11 @@ EXAMPLES:
      crypto --search "solana"      # Search for coins
 
   3. View price charts:
-     crypto bitcoin --graph         # Show line chart
-     crypto bitcoin --graph --candles    # Show candlestick chart
-     crypto bitcoin --graph --interval 30d   # Show 30-day chart
+     crypto bitcoin --graph                    # Line chart (7 days)
+     crypto bitcoin --graph --candles          # Candlestick chart
+     crypto bitcoin --graph --interval 30d   # 30-day chart
+     crypto bitcoin --graph --from 2026-06-01 --to 2026-06-30
+     crypto bitcoin --graph --width 100 --height 24
 
   4. Manage portfolio:
      crypto portfolio add bitcoin 0.5 50000 buy   # Add transaction
@@ -126,6 +127,10 @@ Use "crypto [command] --help" for more information about a command.`,
 	rootCmd.PersistentFlags().Bool("graph", false, "Display price chart for the specified coin")
 	rootCmd.PersistentFlags().String("interval", "7d", "Chart time interval (1d, 7d, 14d, 30d, 90d, 180d, 1y, max)")
 	rootCmd.PersistentFlags().Bool("candles", false, "Display candlestick chart instead of line chart")
+	rootCmd.PersistentFlags().String("from", "", "Chart start date (YYYY-MM-DD or YYYY-MM-DD HH:MM)")
+	rootCmd.PersistentFlags().String("to", "", "Chart end date (YYYY-MM-DD or YYYY-MM-DD HH:MM)")
+	rootCmd.PersistentFlags().Int("width", 80, "Chart width in characters")
+	rootCmd.PersistentFlags().Int("height", 20, "Chart height in characters")
 
 	// Add subcommands
 	rootCmd.AddCommand(alertCmd)
@@ -183,60 +188,122 @@ func displayPriceGraph(coinID, currency string) {
 	currency = utils.NormalizeCurrency(currency)
 	currencySymbol := utils.CurrencySymbol(currency)
 
-	// Get interval and chart type from flags
 	interval, _ := rootCmd.Flags().GetString("interval")
 	showCandles, _ := rootCmd.Flags().GetBool("candles")
+	fromStr, _ := rootCmd.Flags().GetString("from")
+	toStr, _ := rootCmd.Flags().GetString("to")
+	chartWidth, _ := rootCmd.Flags().GetInt("width")
+	chartHeight, _ := rootCmd.Flags().GetInt("height")
 
-	var priceValues []float64
-	var timestamps []time.Time
+	var fromDate, toDate *time.Time
+	if fromStr != "" {
+		t, err := utils.ParseChartDate(fromStr)
+		if err != nil {
+			fmt.Printf("Error: invalid --from date: %v\n", err)
+			os.Exit(1)
+		}
+		fromDate = &t
+	}
+	if toStr != "" {
+		t, err := utils.ParseChartDate(toStr)
+		if err != nil {
+			fmt.Printf("Error: invalid --to date: %v\n", err)
+			os.Exit(1)
+		}
+		// Include the full end day when only a date is given
+		if !strings.Contains(toStr, ":") {
+			endOfDay := t.Add(24*time.Hour - time.Second)
+			toDate = &endOfDay
+		} else {
+			toDate = &t
+		}
+	}
+
+	// When custom range is set, pick API interval that covers the span
+	apiInterval := service.SelectInterval(interval)
+	if fromDate != nil || toDate != nil {
+		rangeFrom := time.Now().AddDate(0, 0, -7)
+		rangeTo := time.Now()
+		if fromDate != nil {
+			rangeFrom = *fromDate
+		}
+		if toDate != nil {
+			rangeTo = *toDate
+		}
+		apiInterval = service.SelectIntervalForRange(rangeFrom, rangeTo)
+		interval = apiInterval.Name
+	}
+
+	chartCfg := utils.ChartConfig{
+		Width:          chartWidth,
+		Height:         chartHeight,
+		CurrencySymbol: currencySymbol,
+		YTickCount:     5,
+		XTickCount:     5,
+	}
+
+	var series []utils.SeriesPoint
 	var ohlcData []models.OHLC
 
 	if showCandles {
-		// Get OHLC data for candle chart
-		data, err := coinGecko.GetCoinOHLC(coinID, currency, interval)
+		data, err := coinGecko.GetCoinOHLC(coinID, currency, apiInterval.Name)
 		if err != nil {
 			fmt.Printf("Error fetching OHLC data: %v\n", err)
 			os.Exit(1)
 		}
-		ohlcData = data
-		// Extract close prices for price range
-		priceValues = make([]float64, len(data))
-		for i, candle := range data {
-			priceValues[i] = candle.Close
-			timestamps = append(timestamps, time.Unix(candle.Time/1000, 0))
+		ohlcData = utils.FilterOHLCByDateRange(data, fromDate, toDate)
+		for _, candle := range ohlcData {
+			series = append(series, utils.SeriesPoint{
+				Time:  time.Unix(candle.Time/1000, 0),
+				Value: candle.Close,
+			})
 		}
 	} else {
-		// Get price history for line chart
-		prices, err := coinGecko.GetCoinPriceHistory(coinID, currency, interval)
+		prices, err := coinGecko.GetCoinPriceHistory(coinID, currency, apiInterval.Name)
 		if err != nil {
 			fmt.Printf("Error fetching price history: %v\n", err)
 			os.Exit(1)
 		}
-
-		// Extract price values and timestamps
-		priceValues = make([]float64, len(prices))
-		for i, price := range prices {
-			priceValues[i] = price[1]
-			timestamps = append(timestamps, time.Unix(int64(price[0])/1000, 0))
+		for _, price := range prices {
+			series = append(series, utils.SeriesPoint{
+				Time:  time.Unix(int64(price[0])/1000, 0),
+				Value: price[1],
+			})
 		}
+		series = utils.FilterSeriesByDateRange(series, fromDate, toDate)
 	}
 
-	if len(priceValues) == 0 {
-		fmt.Println("Error: No price data available for the selected interval")
+	if len(series) == 0 {
+		fmt.Println("Error: No price data available for the selected interval or date range")
 		os.Exit(1)
 	}
 
-	// Color definitions
+	chartType := "Line"
+	if showCandles {
+		chartType = "Candlestick"
+	}
+
 	titleColor := color.New(color.FgHiCyan, color.Bold).SprintFunc()
 	captionColor := color.New(color.FgHiBlue).SprintFunc()
 	labelColor := color.New(color.FgHiBlue).SprintFunc()
 	valueColor := color.New(color.FgHiWhite).SprintFunc()
+	statsColor := color.New(color.FgHiYellow).SprintFunc()
 
-	// Title
-	fmt.Printf("\n%s %s\n\n", titleColor("📈"), titleColor(fmt.Sprintf("%s Price Chart (%s)", strings.ToUpper(coinID), interval)))
+	fmt.Printf("\n%s %s\n\n", titleColor("📈"), titleColor(fmt.Sprintf("%s %s Chart (%s)",
+		strings.ToUpper(coinID), chartType, interval)))
 
-	// Price range information
-	minPrice, maxPrice := utils.MinMax(priceValues)
+	stats := utils.ComputePeriodStats(series)
+	fmt.Println(statsColor(utils.FormatPeriodStatsLine(stats, currencySymbol)))
+
+	minPrice, maxPrice := series[0].Value, series[0].Value
+	for _, p := range series[1:] {
+		if p.Value < minPrice {
+			minPrice = p.Value
+		}
+		if p.Value > maxPrice {
+			maxPrice = p.Value
+		}
+	}
 	priceRange := maxPrice - minPrice
 	fmt.Printf("%s %s%s - %s%s (Δ %s%s)\n",
 		labelColor("Price Range:"),
@@ -244,39 +311,24 @@ func displayPriceGraph(coinID, currency string) {
 		currencySymbol, valueColor(utils.FormatCurrency(maxPrice)),
 		currencySymbol, valueColor(utils.FormatCurrency(priceRange)))
 
-	// Time range information
-	if len(timestamps) > 0 {
-		startTime := timestamps[0]
-		endTime := timestamps[len(timestamps)-1]
-		fmt.Printf("%s %s - %s\n\n",
-			labelColor("Time Range:"),
-			valueColor(startTime.Format("2006-01-02 15:04")),
-			valueColor(endTime.Format("2006-01-02 15:04")))
-	}
+	startTime := series[0].Time
+	endTime := series[len(series)-1].Time
+	fmt.Printf("%s %s - %s\n\n",
+		labelColor("Time Range:"),
+		valueColor(startTime.Format("2006-01-02 15:04")),
+		valueColor(endTime.Format("2006-01-02 15:04")))
 
 	if showCandles {
-		// Draw candle chart
-		candleChart := utils.GenerateCandleChart(ohlcData)
-		fmt.Println(candleChart)
-		fmt.Println(captionColor(fmt.Sprintf("Data source from coingecko.com at %s", utils.GetCurrentTime())))
+		fmt.Print(utils.RenderCandleChart(ohlcData, chartCfg))
 	} else {
-		// Prepare Y-axis labels
-		priceStep := priceRange / 4
-		fmt.Printf("%s%s ┤\n", currencySymbol, utils.FormatCurrency(maxPrice))
-		for i := 3; i >= 0; i-- {
-			price := minPrice + (float64(i) * priceStep)
-			fmt.Printf("%s%s ┤\n", currencySymbol, utils.FormatCurrency(price))
-		}
-
-		// Draw line chart
-		graph := asciigraph.Plot(priceValues,
-			asciigraph.Height(20),   // Increase height
-			asciigraph.Width(100),   // Fixed width
-			asciigraph.Precision(2), // 2 decimal precision
-		)
-		fmt.Println(graph)
-		fmt.Println(captionColor(fmt.Sprintf("\nData source from coingecko.com at %s", utils.GetCurrentTime())))
+		fmt.Print(utils.RenderLineChart(series, chartCfg))
 	}
+
+	legend := "█/░ = Bullish/Bearish candles"
+	if !showCandles {
+		legend = "● = price point"
+	}
+	fmt.Println(captionColor(fmt.Sprintf("%s | Data source: coingecko.com at %s", legend, utils.GetCurrentTime())))
 }
 
 func PrintList(page string, perPage string, currency string) {

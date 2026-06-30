@@ -1,13 +1,15 @@
 # crypto
 
-<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v1.2.4" target="_blank"><img src="https://img.shields.io/badge/version-v1.2.4-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
+<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v1.3.0" target="_blank"><img src="https://img.shields.io/badge/version-v1.3.0-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
 
 <p>A powerful and user-friendly CLI tool for real-time cryptocurrency tracking, portfolio management, and market analysis.</p>
 
 ## Features
 
 - 🚀 Real-time cryptocurrency price tracking
-- 📊 Interactive line and candlestick charts
+- 📊 Terminal trading charts with line and candlestick modes
+- 📉 OHLC period stats (Open, High, Low, Close, change %)
+- 📅 Custom date range filtering for charts
 - 💼 Portfolio management with transaction history
 - 🔔 Customizable price alerts
 - 🌐 Multi-currency support (USD, EUR, TRY, etc.)
@@ -119,16 +121,47 @@ ATL: $67.81 (2013-07-06)
 ### Interactive Charts
 
 ```bash
-# Display line chart (default)
+# Line chart (default, 7-day interval)
 crypto bitcoin --graph
 
-# Show candlestick chart
+# Candlestick chart
 crypto bitcoin --graph --candles
 
-# Customize time interval (default: 7d)
+# Preset time intervals (default: 7d)
 crypto bitcoin --graph --interval 30d
 
+# Custom date range
+crypto bitcoin --graph --from 2026-06-01 --to 2026-06-30
+
+# Adjust chart size (terminal characters)
+crypto bitcoin --graph --width 100 --height 24
+
 # Available intervals: 1d, 7d, 14d, 30d, 90d, 180d, 1y, max
+```
+
+Charts include aligned Y-axis price ticks, X-axis date labels, and period OHLC summary.
+
+Example output:
+```
+📈 BITCOIN Line Chart (7d)
+
+O: $62.65K  H: $62.65K  L: $58.38K  C: $58.38K  Δ: $-4271.97 (-6.82%)
+Price Range: $58.38K - $62.65K (Δ $4.27K)
+Time Range: 2026-06-24 03:00 - 2026-06-30 21:14
+
+$62.87K ┤
+        ┤●
+        ┤ ╲╲
+$61.69K ┤   ╲╲
+        ┤     ●╲
+$60.52K ┤       ╲╲
+        ┤         ╲●╱╱
+$59.34K ┤           ╲╲
+        ┤             ╲╲
+$58.17K ┤               ●
+        └────────────────────────────────────────
+         06-24    06-26         06-28         06-30
+● = price point | Data source: coingecko.com at 2026-06-30 21:14:26
 ```
 
 ### Portfolio Management

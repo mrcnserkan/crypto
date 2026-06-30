@@ -4,7 +4,6 @@ go 1.21
 
 require (
 	github.com/fatih/color v1.15.0
-	github.com/guptarohit/asciigraph v0.5.6
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/spf13/cobra v1.7.0
 	golang.org/x/text v0.13.0
