@@ -259,6 +259,11 @@ func (cg *CoinGecko) GetCoinOHLC(id, currency string, interval string) ([]models
 	return ohlcData, nil
 }
 
+// SelectInterval returns the interval preset for the given name (defaults to 7d).
+func SelectInterval(interval string) Interval {
+	return selectInterval(interval)
+}
+
 func selectInterval(interval string) Interval {
 	for _, i := range Intervals {
 		if i.Name == interval {
@@ -266,6 +271,37 @@ func selectInterval(interval string) Interval {
 		}
 	}
 	return Intervals[1] // Default to 7d
+}
+
+// SelectIntervalForRange picks the smallest preset interval that covers the given span.
+func SelectIntervalForRange(from, to time.Time) Interval {
+	if to.Before(from) {
+		from, to = to, from
+	}
+	spanDays := int(to.Sub(from).Hours()/24) + 1
+	if spanDays < 1 {
+		spanDays = 1
+	}
+	best := Intervals[len(Intervals)-1] // max
+	for _, i := range Intervals {
+		if i.Days == -1 {
+			continue
+		}
+		if i.Days >= spanDays {
+			best = i
+			break
+		}
+	}
+	return best
+}
+
+// DaysFromNow returns days from t until now (minimum 1).
+func DaysFromNow(t time.Time) int {
+	days := int(time.Since(t).Hours()/24) + 1
+	if days < 1 {
+		return 1
+	}
+	return days
 }
 
 type AlertChecker struct {
