@@ -30,11 +30,11 @@
 
 ```bash
 go install github.com/mrcnserkan/crypto@v1.4.0
-# veya en son sürüm:
+# or latest:
 go install github.com/mrcnserkan/crypto@latest
 ```
 
-> **Go modül sürümü:** Büyük özellik seti v1.4 olarak yayınlanır. Go'da `v2.x` git tag'i kullanırsak import path'e zorunlu `/v2` eklenir (`github.com/mrcnserkan/crypto/v2`). Temiz path için v1.x hattında kalıyoruz. Eski `v2.0.x` tag'leri geçersizdir — `v1.4.0` kullanın.
+> **Version note:** This release is tagged `v1.4.0` (not `v2.x`). Go requires a `/v2` suffix in the module path for `v2.x` tags (`github.com/mrcnserkan/crypto/v2`). We stay on the v1 line to keep the install path as `github.com/mrcnserkan/crypto`. Deprecated tags `v2.0.0` and `v2.0.1` should not be used.
 
 ### Build from Source
 
