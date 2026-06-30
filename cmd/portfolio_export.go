@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mrcnserkan/crypto/v2/models"
+	"github.com/mrcnserkan/crypto/models"
 	"github.com/spf13/cobra"
 )
 

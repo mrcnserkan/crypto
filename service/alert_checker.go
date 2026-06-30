@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mrcnserkan/crypto/v2/models"
-	"github.com/mrcnserkan/crypto/v2/utils"
+	"github.com/mrcnserkan/crypto/models"
+	"github.com/mrcnserkan/crypto/utils"
 )
 
 const defaultAlertCheckInterval = 5 * time.Minute

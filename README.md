@@ -1,6 +1,6 @@
 # crypto
 
-<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v2.0.1" target="_blank"><img src="https://img.shields.io/badge/version-v2.0.1-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
+<p><a href="https://go.dev" target="_blank"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go" alt="go version" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/blob/master/LICENSE.md" target="_blank"><img src="https://img.shields.io/badge/license-MIT-red?style=for-the-badge&logo=none" alt="license" /></a>&nbsp;<a href="https://github.com/mrcnserkan/crypto/releases/tag/v1.4.0" target="_blank"><img src="https://img.shields.io/badge/version-v1.4.0-blue?style=for-the-badge&logo=none" alt="version" /></a></p>
 
 <p>A powerful and user-friendly CLI tool for real-time cryptocurrency tracking, portfolio management, and market analysis.</p>
 
@@ -29,8 +29,12 @@
 ### Quick Install
 
 ```bash
-go install github.com/mrcnserkan/crypto/v2@v2.0.1
+go install github.com/mrcnserkan/crypto@v1.4.0
+# veya en son sürüm:
+go install github.com/mrcnserkan/crypto@latest
 ```
+
+> **Go modül sürümü:** Büyük özellik seti v1.4 olarak yayınlanır. Go'da `v2.x` git tag'i kullanırsak import path'e zorunlu `/v2` eklenir (`github.com/mrcnserkan/crypto/v2`). Temiz path için v1.x hattında kalıyoruz. Eski `v2.0.x` tag'leri geçersizdir — `v1.4.0` kullanın.
 
 ### Build from Source
 
@@ -126,7 +130,7 @@ crypto portfolio list --currency eur
 
 ### Price Alerts
 
-**Breaking change in v2.0:** Alerts are no longer checked automatically when you run other commands. You must start monitoring explicitly.
+**Breaking change in v1.4:** Alerts are no longer checked automatically when you run other commands. You must start monitoring explicitly.
 
 ```bash
 crypto alert add bitcoin 50000 above
@@ -167,7 +171,7 @@ All local data lives in `~/.crypto/`:
 | `config.json` | User preferences |
 | `alert.pid` | Background daemon PID |
 
-## Breaking Changes (v1.x → v2.0)
+## Breaking Changes (v1.3 → v1.4)
 
 1. **Alerts** no longer auto-start — use `crypto alert watch` or `crypto alert start`
 2. **`--currency`** is a single global flag — portfolio subcommand no longer defines its own

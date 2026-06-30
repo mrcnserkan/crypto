@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/mrcnserkan/crypto/v2/utils"
+	"github.com/mrcnserkan/crypto/utils"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
